@@ -38,7 +38,8 @@ async function refresh(): Promise<void> {
   const notice = $('#notice');
   let text = '';
   if (status.connection === 'unconfigured') text = 'Enter your Tiny Engineer address in Settings.';
-  else if (status.connection === 'no-permission') text = 'Firefox needs your permission to contact the robot. Open Settings → “Save & allow access”.';
+  else if (status.connection === 'no-permission')
+    text = status.connectionDetail || 'Firefox needs your permission to contact the robot. Open Settings → “Save & allow access”.';
   else if (status.connection === 'error' || status.connection === 'disconnected') text = status.connectionDetail;
   notice.hidden = text === '';
   setText(notice, text);

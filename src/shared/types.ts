@@ -28,7 +28,7 @@ export type Platform = (typeof PLATFORMS)[number];
 export const PLATFORM_LABELS: Record<Platform, string> = {
   chatgpt: 'ChatGPT',
   claude: 'Claude',
-  openwebui: 'C-3PO / Open WebUI',
+  openwebui: 'Open WebUI',
 };
 
 /**

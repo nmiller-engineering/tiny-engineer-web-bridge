@@ -3,6 +3,7 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_MAPPING,
   deviceMatchPattern,
+  isDeviceConfigured,
   normalizeOrigin,
   originToMatchPattern,
   sanitizeConfig,
@@ -60,8 +61,8 @@ describe('validatePort / validateToken', () => {
 describe('normalizeOrigin', () => {
   it('normalizes valid origins', () => {
     expect(normalizeOrigin(' http://192.168.1.20:3000/ ')).toEqual({ origin: 'http://192.168.1.20:3000' });
-    expect(normalizeOrigin('https://c3po.home.arpa')).toEqual({ origin: 'https://c3po.home.arpa' });
-    expect(normalizeOrigin('HTTP://C3PO.LOCAL:8080')).toEqual({ origin: 'http://c3po.local:8080' });
+    expect(normalizeOrigin('https://chat.home.arpa')).toEqual({ origin: 'https://chat.home.arpa' });
+    expect(normalizeOrigin('HTTP://OPENWEBUI.LOCAL:8080')).toEqual({ origin: 'http://openwebui.local:8080' });
   });
 
   it.each([
@@ -102,7 +103,7 @@ describe('sanitizeConfig', () => {
       debugLogging: 'yes',
     });
     expect(cfg.enabled).toBe(false);
-    expect(cfg.device).toEqual({ host: '192.168.1.50', port: 8080, token: '', autoReconnect: false });
+    expect(cfg.device).toEqual({ transport: 'http', usbVendorId: null, usbProductId: null, host: '192.168.1.50', port: 8080, token: '', autoReconnect: false });
     expect(cfg.platforms).toEqual({ chatgpt: false, claude: true, openwebui: true, openwebuiOrigin: 'http://x.local:3000' });
     expect(cfg.mapping.thinking).toBe('reading');
     expect(cfg.mapping.responding).toBe(DEFAULT_MAPPING.responding);
@@ -112,6 +113,15 @@ describe('sanitizeConfig', () => {
     expect(cfg.timing.staleMs).toBe(6000);
     expect(cfg.arbitration).toBe('activity-priority');
     expect(cfg.debugLogging).toBe(false);
+  });
+
+  it('sanitizes the transport and USB ids', () => {
+    const ok = sanitizeConfig({ device: { transport: 'serial', usbVendorId: 0x303a, usbProductId: 0x1001 } });
+    expect(ok.device).toMatchObject({ transport: 'serial', usbVendorId: 0x303a, usbProductId: 0x1001 });
+    expect(isDeviceConfigured(ok)).toBe(true); // USB needs no host
+    const bad = sanitizeConfig({ device: { transport: 'bluetooth', usbVendorId: 70000, usbProductId: '1' } });
+    expect(bad.device).toMatchObject({ transport: 'http', usbVendorId: null, usbProductId: null });
+    expect(isDeviceConfigured(bad)).toBe(false);
   });
 
   it('drops invalid hosts and disables Open WebUI without a valid origin', () => {

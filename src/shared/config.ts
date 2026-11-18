@@ -15,7 +15,14 @@ import {
   type MappingTarget,
 } from './types';
 
+export type Transport = 'http' | 'serial';
+
 export interface DeviceConfig {
+  /** How to reach the robot: Wi-Fi (HTTP) or USB (Web Serial). */
+  transport: Transport;
+  /** USB ids of the granted serial port (Web Serial); null = any granted port. */
+  usbVendorId: number | null;
+  usbProductId: number | null;
   /** IPv4 address or DNS hostname, without scheme/port/path. Empty = not configured. */
   host: string;
   port: number;
@@ -29,7 +36,7 @@ export interface PlatformConfig {
   chatgpt: boolean;
   claude: boolean;
   openwebui: boolean;
-  /** Exact origin of the self-hosted Open WebUI ("C-3PO"), e.g. http://192.168.1.20:3000. */
+  /** Exact origin of a self-hosted Open WebUI instance, e.g. http://192.168.1.20:3000. */
   openwebuiOrigin: string;
 }
 
@@ -102,7 +109,7 @@ export const TIMING_BOUNDS: Record<keyof TimingConfig, readonly [number, number]
 
 export const DEFAULT_CONFIG: Config = {
   enabled: true,
-  device: { host: '', port: 80, token: '', autoReconnect: true },
+  device: { transport: 'http', usbVendorId: null, usbProductId: null, host: '', port: 80, token: '', autoReconnect: true },
   platforms: { chatgpt: true, claude: true, openwebui: false, openwebuiOrigin: '' },
   mapping: { ...DEFAULT_MAPPING },
   timing: { ...DEFAULT_TIMING },
@@ -217,6 +224,10 @@ function clampInt(value: unknown, [min, max]: readonly [number, number], fallbac
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+function usbId(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffff ? value : null;
+}
+
 export function sanitizeMappingTarget(value: unknown, fallback: MappingTarget): MappingTarget {
   if (value === DISABLED || isAnimation(value)) return value;
   return fallback;
@@ -257,6 +268,9 @@ export function sanitizeConfig(raw: unknown): Config {
   return {
     enabled: bool(input.enabled, d.enabled),
     device: {
+      transport: dev.transport === 'serial' ? 'serial' : 'http',
+      usbVendorId: usbId(dev.usbVendorId),
+      usbProductId: usbId(dev.usbProductId),
       host: host !== '' && validateHost(host) === null ? host : '',
       port,
       token: validateToken(token) === null ? token : '',
@@ -275,8 +289,9 @@ export function sanitizeConfig(raw: unknown): Config {
   };
 }
 
+/** Wi-Fi needs a host; USB needs nothing up front (the granted port is checked at runtime). */
 export function isDeviceConfigured(config: Config): boolean {
-  return config.device.host !== '';
+  return config.device.transport === 'serial' || config.device.host !== '';
 }
 
 /** Map a state to its configured animation (or DISABLED). */

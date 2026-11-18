@@ -14,7 +14,8 @@ import type {
 } from '../shared/messaging';
 import { ANIMATION_KIND, isAIState, isAnimation, type Animation, type Platform } from '../shared/types';
 import { CommandQueue, type SendOutcome } from './command-queue';
-import { DeviceClient, type DeviceErrorKind, type DeviceTarget } from './device-client';
+import { DeviceClient, type DeviceErrorKind, type DeviceTarget, type RobotClient } from './device-client';
+import { SerialClient, type SerialProvider } from './serial-client';
 import type { DebugLog } from './logger';
 import { StateManager, type StateManagerSnapshot } from './state-manager';
 import { effectiveState, TabRegistry, type RegistrySnapshot } from './tab-manager';
@@ -25,6 +26,8 @@ export interface BridgeDeps {
   setTimer: (fn: () => void, ms: number) => unknown;
   clearTimer: (handle: unknown) => void;
   hasDevicePermission?: (target: DeviceTarget) => Promise<boolean>;
+  /** Web Serial provider (navigator.serial) — null/absent when unavailable. */
+  serialProvider?: () => SerialProvider | null;
   /** Called (debounced by the caller if desired) whenever state worth persisting changes. */
   onChange?: () => void;
   log?: DebugLog;
@@ -60,6 +63,8 @@ function connectionFor(kind: DeviceErrorKind): ConnectionState {
     case 'not-configured':
     case 'invalid-target':
       return 'unconfigured';
+    case 'unavailable':
+      return 'error';
     default:
       return 'error';
   }
@@ -71,7 +76,8 @@ export class Bridge {
   readonly registry = new TabRegistry();
   readonly queue: CommandQueue;
   readonly state: StateManager;
-  readonly client: DeviceClient;
+  private readonly httpClient: DeviceClient;
+  private readonly serialClient: SerialClient;
   private config: Config;
   private status: StatusState = {
     connection: 'unknown',
@@ -93,7 +99,13 @@ export class Bridge {
     this.config = config;
     if (!isDeviceConfigured(config)) this.status.connection = 'unconfigured';
 
-    this.client = new DeviceClient({
+    this.serialClient = new SerialClient({
+      provider: () => deps.serialProvider?.() ?? null,
+      selection: () => ({ usbVendorId: this.config.device.usbVendorId, usbProductId: this.config.device.usbProductId }),
+      timeoutMs: () => this.config.timing.requestTimeoutMs,
+    });
+
+    this.httpClient = new DeviceClient({
       fetch: deps.fetch,
       getTarget: () => (isDeviceConfigured(this.config) ? this.target() : null),
       timeoutMs: () => this.config.timing.requestTimeoutMs,
@@ -121,6 +133,11 @@ export class Bridge {
     });
   }
 
+  /** The client for the configured transport. */
+  get client(): RobotClient {
+    return this.config.device.transport === 'serial' ? this.serialClient : this.httpClient;
+  }
+
   private log(message: string): void {
     this.deps.log?.log(message);
   }
@@ -138,8 +155,15 @@ export class Bridge {
     const prev = this.config;
     this.config = next;
     const deviceChanged =
-      prev.device.host !== next.device.host || prev.device.port !== next.device.port || prev.device.token !== next.device.token;
+      prev.device.transport !== next.device.transport ||
+      prev.device.usbVendorId !== next.device.usbVendorId ||
+      prev.device.usbProductId !== next.device.usbProductId ||
+      prev.device.host !== next.device.host ||
+      prev.device.port !== next.device.port ||
+      prev.device.token !== next.device.token;
     if (deviceChanged) {
+      // Release the USB port when switching away from it or to another device.
+      void this.serialClient.close();
       this.queue.invalidate();
       this.queue.resetBackoff();
       this.status = {
@@ -267,7 +291,7 @@ export class Bridge {
     if (!auth.ok) return fail(connectionFor(auth.error), auth.message);
     this.status.authRequired = auth.data.required;
     this.status.firmwareVersion = auth.data.version;
-    if (auth.data.required === true && this.config.device.token === '') {
+    if (this.config.device.transport === 'http' && auth.data.required === true && this.config.device.token === '') {
       return fail('error', 'The robot requires an access token. Enter it in the connection settings.');
     }
 
@@ -286,10 +310,11 @@ export class Bridge {
     this.state.evaluate();
     this.deps.onChange?.();
     const v = this.status.firmwareVersion ? ` (firmware ${this.status.firmwareVersion})` : '';
+    const via = this.config.device.transport === 'serial' ? ' over USB' : '';
     return {
       ok: true,
       connection: 'connected',
-      message: `Connected to Tiny Engineer${v}.`,
+      message: `Connected to Tiny Engineer${via}${v}.`,
       firmwareVersion: this.status.firmwareVersion,
       authRequired: this.status.authRequired,
       robotAnimation: this.status.robotAnimation,
@@ -362,7 +387,8 @@ export class Bridge {
 
   /** Refresh the robot's reported animation for the UI (GET /anim, no motion). */
   async refreshRobotAnimation(minIntervalMs = 3000): Promise<void> {
-    if (!isDeviceConfigured(this.config)) return;
+    // Serial has no read-only animation query; status comes from command replies.
+    if (!isDeviceConfigured(this.config) || this.config.device.transport === 'serial') return;
     // Read-only, but still throttled: the popup polls while it is open.
     const now = this.deps.now();
     if (now - this.lastRefreshAt < minIntervalMs) return;

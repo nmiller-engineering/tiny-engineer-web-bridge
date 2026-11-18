@@ -28,7 +28,63 @@ async function update(mutate: (c: Config) => void): Promise<void> {
 
 // --------------------------------------------------------------- connection
 
+interface WebSerialLike {
+  requestPort(options?: { filters?: { usbVendorId: number }[] }): Promise<{ getInfo(): { usbVendorId?: number; usbProductId?: number } }>;
+}
+
+function webSerial(): WebSerialLike | null {
+  const s = (navigator as unknown as { serial?: WebSerialLike }).serial;
+  return s && typeof s.requestPort === 'function' ? s : null;
+}
+
+const hex = (n: number | null) => (n === null ? '?' : `0x${n.toString(16).padStart(4, '0')}`);
+
+function fillTransport(): void {
+  const serial = config.device.transport === 'serial';
+  for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) radio.checked = radio.value === config.device.transport;
+  $('#serial-section').hidden = !serial;
+  $('#device-form').hidden = serial;
+  $('#serial-unavailable').hidden = webSerial() !== null;
+  ($('#choose-serial') as HTMLButtonElement).disabled = webSerial() === null;
+  setText(
+    $('#serial-device'),
+    config.device.usbVendorId === null ? 'none chosen (any granted port is used)' : `USB ${hex(config.device.usbVendorId)}:${hex(config.device.usbProductId)}`,
+  );
+}
+
+for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) {
+  radio.addEventListener('change', () => {
+    if (!radio.checked) return;
+    void update((c) => (c.device.transport = radio.value === 'serial' ? 'serial' : 'http')).then(fillTransport);
+  });
+}
+
+$('#choose-serial').addEventListener('click', () => {
+  const serial = webSerial();
+  if (!serial) return;
+  const filters = $input('#serial-all').checked ? undefined : [{ usbVendorId: 0x303a }]; // Espressif
+  // requestPort must be called directly in the user gesture.
+  void serial
+    .requestPort(filters ? { filters } : {})
+    .then(async (port) => {
+      const info = port.getInfo();
+      await update((c) => {
+        c.device.transport = 'serial';
+        c.device.usbVendorId = info.usbVendorId ?? null;
+        c.device.usbProductId = info.usbProductId ?? null;
+      });
+      setText($('#serial-error'), '');
+      fillTransport();
+      await runConnectionTest();
+    })
+    .catch((err: unknown) => {
+      const name = err instanceof Error ? err.name : '';
+      setText($('#serial-error'), name === 'NotFoundError' ? 'No device chosen.' : `Could not select a device (${name || 'error'}).`);
+    });
+});
+
 function fillDevice(): void {
+  fillTransport();
   $input('#host').value = config.device.host;
   $input('#port').value = String(config.device.port);
   $input('#token').value = config.device.token;
@@ -57,7 +113,7 @@ $('#device-form').addEventListener('submit', (ev) => {
   // permissions.request must be the first await inside the user gesture.
   void browser.permissions.request({ origins: [pattern] }).then(async (granted) => {
     await update((c) => {
-      c.device = { host, port, token, autoReconnect: $input('#auto-reconnect').checked };
+      c.device = { ...c.device, transport: 'http', host, port, token, autoReconnect: $input('#auto-reconnect').checked };
     });
     fillDevice();
     if (oldPattern && oldPattern !== pattern && !isPatternInUse(oldPattern)) {

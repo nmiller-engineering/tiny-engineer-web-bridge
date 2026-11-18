@@ -12,6 +12,7 @@ import { isPlatform } from '../shared/types';
 import { Bridge, isBridgeSnapshot } from './bridge';
 import { expectedOrigin, injectIntoOpenTabs, syncContentScripts } from './content-scripts';
 import { DebugLog } from './logger';
+import { webSerialProvider } from './serial-client';
 
 const SESSION_KEY = 'runtime';
 const WATCHDOG_ALARM = 'te-watchdog';
@@ -59,6 +60,7 @@ async function init(): Promise<Bridge> {
     setTimer: (fn, ms) => setTimeout(fn, ms),
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     hasDevicePermission: (t) => hasDevicePermission(t.host),
+    serialProvider: webSerialProvider,
     onChange: schedulePersist,
     log: debugLog,
   });

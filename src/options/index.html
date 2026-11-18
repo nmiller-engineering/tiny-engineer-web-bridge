@@ -23,6 +23,28 @@
       <!-- Connection -------------------------------------------------- -->
       <section class="card" aria-labelledby="h-connection">
         <h2 id="h-connection">Robot connection</h2>
+        <fieldset class="transport">
+          <legend>Connect via</legend>
+          <label class="check"><input type="radio" name="transport" value="http" /> Wi-Fi (HTTP on your local network)</label>
+          <label class="check"><input type="radio" name="transport" value="serial" /> USB cable (Web Serial)</label>
+        </fieldset>
+
+        <div id="serial-section" hidden>
+          <p class="notice" id="serial-unavailable" hidden>
+            Web Serial is not available in this Firefox version or profile, so the USB connection cannot be used here.
+            Use Wi-Fi instead, or see the README section “USB / Web Serial”.
+          </p>
+          <p class="muted small-text">Connect the robot by USB and choose its serial port. Close other programs using the port
+            first (for example run <code>tiny-engineer daemon release</code>). The serial protocol has no token: anyone with
+            physical access can control the robot.</p>
+          <div class="buttons">
+            <button type="button" id="choose-serial">Choose USB device</button>
+            <label class="check"><input type="checkbox" id="serial-all" /> Show all serial devices (not only Espressif)</label>
+          </div>
+          <dl class="facts"><dt>Selected device</dt><dd id="serial-device">none</dd></dl>
+          <p class="error" id="serial-error" role="alert"></p>
+        </div>
+
         <form id="device-form" novalidate>
           <div class="grid">
             <label>IPv4 address or hostname
@@ -46,7 +68,7 @@
             <button type="submit" id="save-device">Save &amp; allow access</button>
             <button type="button" id="test-connection" class="secondary">Test connection</button>
           </div>
-          <p class="muted small-text">
+          <p class="muted small-text" id="http-note">
             Communication with the robot is plain HTTP on your local network and is not encrypted. The token is stored
             unencrypted in this Firefox profile. See SECURITY.md.
           </p>
@@ -73,7 +95,7 @@
             <span class="perm" id="perm-claude"></span>
           </li>
           <li class="openwebui">
-            <label class="check"><input type="checkbox" id="pf-openwebui" /> C-3PO / Open WebUI <span class="muted">self-hosted</span></label>
+            <label class="check"><input type="checkbox" id="pf-openwebui" /> Open WebUI <span class="muted">self-hosted, any address</span></label>
             <span class="perm" id="perm-openwebui"></span>
             <div class="row">
               <input id="openwebui-origin" type="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.20:3000" aria-label="Open WebUI address" />

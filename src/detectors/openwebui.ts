@@ -1,5 +1,5 @@
 /**
- * Open WebUI profile (used for the self-hosted "C-3PO" instance).
+ * Open WebUI profile (any self-hosted instance; the origin is user-configured).
  *
  * VERIFICATION STATUS: selectors were derived from the Open WebUI source
  * (src/lib/components/chat/MessageInput.svelte, Messages/ResponseMessage.svelte,

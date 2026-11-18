@@ -34,7 +34,9 @@ export type DeviceErrorKind =
   | 'unauthorized'
   | 'not-provisioned'
   | 'http'
-  | 'bad-response';
+  | 'bad-response'
+  | 'unavailable'
+  | 'rejected';
 
 export type DeviceResult<T> =
   | { ok: true; status: number; data: T }
@@ -49,6 +51,15 @@ export interface HealthInfo {
 }
 export interface AnimInfo {
   animation: string | null;
+}
+
+/** Common interface of the Wi-Fi (HTTP) and USB (Web Serial) clients. */
+export interface RobotClient {
+  getAuth(): Promise<DeviceResult<AuthInfo>>;
+  getHealth(): Promise<DeviceResult<HealthInfo>>;
+  getAnimation(): Promise<DeviceResult<AnimInfo>>;
+  setAnimation(animation: Animation): Promise<DeviceResult<AnimInfo>>;
+  close?(): Promise<void>;
 }
 
 export interface RequestSpec {
@@ -142,7 +153,7 @@ function readJsonField<T>(o: unknown, key: string, guard: (v: unknown) => v is T
 const isString = (v: unknown): v is string => typeof v === 'string';
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
 
-export class DeviceClient {
+export class DeviceClient implements RobotClient {
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly deps: DeviceClientDeps) {}
