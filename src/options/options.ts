@@ -394,7 +394,7 @@ async function refreshStatus(): Promise<void> {
   );
   setText(
     $('#diag-command'),
-    s.lastCommand ? `POST /anim?name=${s.lastCommand.animation} → ${s.lastCommand.ok ? 'ok' : 'failed'} (${s.lastCommand.detail}) · ${formatAgo(s.lastCommand.at)}` : '–',
+    s.lastCommand ? `anim “${s.lastCommand.animation}” → ${s.lastCommand.ok ? 'ok' : 'failed'} (${s.lastCommand.detail}) · ${formatAgo(s.lastCommand.at)}` : '–',
   );
   setText($('#diag-error'), s.lastError ? `${s.lastError.message} · ${formatAgo(s.lastError.at)}` : '–');
 

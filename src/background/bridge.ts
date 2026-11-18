@@ -261,10 +261,11 @@ export class Bridge {
       this.status.connection = 'connected';
       this.status.connectionDetail = '';
       this.status.robotAnimation = res.data.animation;
-      this.status.lastCommand = { animation, ok: true, at, detail: `HTTP ${res.status}` };
+      const via = this.config.device.transport === 'serial' ? 'USB' : 'HTTP';
+      this.status.lastCommand = { animation, ok: true, at, detail: `${via} ${res.status}` };
       const committed = this.state.committedState;
       this.status.lastSent = { animation, state: committed && isAIState(committed) ? committed : null, at };
-      this.log(`POST /anim ${animation} → ${res.status}`);
+      this.log(`anim ${animation} → ${res.status} (${this.config.device.transport})`);
       this.deps.onChange?.();
       return { ok: true, message: 'ok' };
     }
@@ -272,7 +273,7 @@ export class Bridge {
     this.status.connectionDetail = res.message;
     this.status.lastCommand = { animation, ok: false, at, detail: res.error };
     this.status.lastError = { message: res.message, at };
-    this.log(`POST /anim ${animation} failed: ${res.error}`);
+    this.log(`anim ${animation} failed: ${res.error} (${this.config.device.transport})`);
     this.deps.onChange?.();
     return { ok: false, message: res.message, retryable: TRANSIENT.has(res.error) };
   }
