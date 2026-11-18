@@ -157,12 +157,14 @@ export function validatePort(port: number): string | null {
 }
 
 /**
- * Tokens are sent as an HTTP header value, so only visible ASCII is allowed.
- * This also rules out header injection via CR/LF.
+ * Same rule as the firmware's `access_token` setting (upstream docs/api.md):
+ * 0–64 printable ASCII characters, no space at either end. Control
+ * characters (CR/LF) are impossible, so no header injection.
  */
 export function validateToken(token: string): string | null {
-  if (token.length > 512) return 'Token is too long.';
-  if (!/^[\x21-\x7e]*$/.test(token)) return 'Token may only contain visible ASCII characters (no spaces).';
+  if (token.length > 64) return 'The robot accepts tokens of at most 64 characters.';
+  if (!/^[\x20-\x7e]*$/.test(token)) return 'Token may only contain printable ASCII characters.';
+  if (token !== token.trim()) return 'Token must not start or end with a space.';
   return null;
 }
 

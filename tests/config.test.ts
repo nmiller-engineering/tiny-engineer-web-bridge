@@ -48,13 +48,17 @@ describe('validatePort / validateToken', () => {
     expect(validatePort(80.5)).not.toBeNull();
   });
 
-  it('allows visible ASCII tokens only (no header injection)', () => {
+  it('matches the firmware token rule (0–64 printable ASCII, no edge spaces)', () => {
     expect(validateToken('')).toBeNull();
     expect(validateToken('abc-DEF_123.~!')).toBeNull();
-    expect(validateToken('has space')).not.toBeNull();
+    expect(validateToken('inner space ok')).toBeNull();
+    expect(validateToken('x'.repeat(64))).toBeNull();
+    expect(validateToken(' leading')).not.toBeNull();
+    expect(validateToken('trailing ')).not.toBeNull();
     expect(validateToken('line\r\nX-Evil: 1')).not.toBeNull();
+    expect(validateToken('tab\tchar')).not.toBeNull();
     expect(validateToken('ünicode')).not.toBeNull();
-    expect(validateToken('x'.repeat(513))).not.toBeNull();
+    expect(validateToken('x'.repeat(65))).not.toBeNull();
   });
 });
 
@@ -95,7 +99,7 @@ describe('sanitizeConfig', () => {
   it('keeps valid values and fixes invalid ones', () => {
     const cfg = sanitizeConfig({
       enabled: false,
-      device: { host: ' 192.168.1.50 ', port: 8080, token: 'bad token', autoReconnect: false },
+      device: { host: ' 192.168.1.50 ', port: 8080, token: ' bad token', autoReconnect: false },
       platforms: { chatgpt: false, claude: true, openwebui: true, openwebuiOrigin: 'http://x.local:3000/' },
       mapping: { thinking: 'reading', responding: 'nonsense', completed: 'disabled' },
       timing: { debounceMs: 999_999, completionMs: 'x', staleMs: 6000 },
