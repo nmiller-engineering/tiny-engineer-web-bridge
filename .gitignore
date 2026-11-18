@@ -1,0 +1,8 @@
+node_modules/
+dist/
+web-ext-artifacts/
+coverage/
+*.log
+.DS_Store
+.env
+.web-extension-id

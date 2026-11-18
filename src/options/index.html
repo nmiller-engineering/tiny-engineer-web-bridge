@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiny Engineer Web Bridge – Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <img src="../icons/icon.svg" alt="" width="40" height="40" />
+      <div>
+        <h1>Tiny Engineer Web Bridge</h1>
+        <p class="muted">Mirrors AI activity in your browser as Tiny Engineer animations. Everything stays local.</p>
+      </div>
+      <label class="switch big" title="Enable or disable the bridge">
+        <input type="checkbox" id="enabled" aria-label="Enable bridge" />
+        <span aria-hidden="true"></span>
+      </label>
+    </header>
+
+    <main>
+      <!-- Connection -------------------------------------------------- -->
+      <section class="card" aria-labelledby="h-connection">
+        <h2 id="h-connection">Robot connection</h2>
+        <form id="device-form" novalidate>
+          <div class="grid">
+            <label>IPv4 address or hostname
+              <input id="host" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="192.168.1.50 or tiny-engineer.local" required />
+            </label>
+            <label>HTTP port
+              <input id="port" type="number" min="1" max="65535" value="80" required />
+            </label>
+            <label class="span-2">Access token <span class="muted">(optional, only if set on the robot)</span>
+              <span class="row">
+                <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="leave empty if the robot has no token" />
+                <button type="button" id="toggle-token" class="secondary small" aria-pressed="false">Show</button>
+              </span>
+            </label>
+            <label class="check span-2">
+              <input id="auto-reconnect" type="checkbox" /> Automatically reconnect when the robot becomes reachable again
+            </label>
+          </div>
+          <p class="error" id="device-error" role="alert"></p>
+          <div class="buttons">
+            <button type="submit" id="save-device">Save &amp; allow access</button>
+            <button type="button" id="test-connection" class="secondary">Test connection</button>
+          </div>
+          <p class="muted small-text">
+            Communication with the robot is plain HTTP on your local network and is not encrypted. The token is stored
+            unencrypted in this Firefox profile. See SECURITY.md.
+          </p>
+        </form>
+        <dl class="facts">
+          <dt>Status</dt><dd><span class="pill" id="connection" data-state="unknown">…</span> <span id="connection-detail" class="muted"></span></dd>
+          <dt>Firmware</dt><dd id="firmware">–</dd>
+          <dt>Auth required</dt><dd id="auth-required">–</dd>
+          <dt>Robot animation</dt><dd id="robot-animation">–</dd>
+          <dt>Last transmitted</dt><dd id="last-sent">–</dd>
+        </dl>
+      </section>
+
+      <!-- Platforms --------------------------------------------------- -->
+      <section class="card" aria-labelledby="h-platforms">
+        <h2 id="h-platforms">AI platforms</h2>
+        <ul class="platforms">
+          <li>
+            <label class="check"><input type="checkbox" id="pf-chatgpt" /> ChatGPT <span class="muted">chatgpt.com</span></label>
+            <span class="perm" id="perm-chatgpt"></span>
+          </li>
+          <li>
+            <label class="check"><input type="checkbox" id="pf-claude" /> Claude <span class="muted">claude.ai</span></label>
+            <span class="perm" id="perm-claude"></span>
+          </li>
+          <li class="openwebui">
+            <label class="check"><input type="checkbox" id="pf-openwebui" /> C-3PO / Open WebUI <span class="muted">self-hosted</span></label>
+            <span class="perm" id="perm-openwebui"></span>
+            <div class="row">
+              <input id="openwebui-origin" type="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.20:3000" aria-label="Open WebUI address" />
+              <button type="button" id="save-openwebui" class="small">Save &amp; allow access</button>
+            </div>
+            <p class="error" id="openwebui-error" role="alert"></p>
+          </li>
+        </ul>
+        <p class="muted small-text">Detection uses page structure only and never reads or sends conversation content.
+          Website changes can break detection; see the Diagnostics section below.</p>
+      </section>
+
+      <!-- Mapping ----------------------------------------------------- -->
+      <section class="card" aria-labelledby="h-mapping">
+        <h2 id="h-mapping">Animations</h2>
+        <p class="muted small-text">Choose the robot animation for each detected state. “Do nothing” leaves the robot as it is.</p>
+        <table class="mapping">
+          <thead><tr><th>AI state</th><th>Robot animation</th><th></th></tr></thead>
+          <tbody id="mapping-body"></tbody>
+        </table>
+        <p class="result" id="anim-result" role="status" aria-live="polite"></p>
+      </section>
+
+      <!-- Behaviour --------------------------------------------------- -->
+      <section class="card" aria-labelledby="h-behaviour">
+        <h2 id="h-behaviour">Behaviour</h2>
+        <fieldset>
+          <legend>Multiple AI tabs</legend>
+          <label class="check"><input type="radio" name="arbitration" value="active-tab" /> Active tab — the most recently focused AI tab controls the robot</label>
+          <label class="check"><input type="radio" name="arbitration" value="activity-priority" /> Activity priority — a tab that is generating may control the robot even in the background</label>
+        </fieldset>
+        <div class="grid timing" id="timing"></div>
+        <button type="button" id="reset-timing" class="secondary small">Reset timing to defaults</button>
+      </section>
+
+      <!-- Diagnostics ------------------------------------------------- -->
+      <section class="card" aria-labelledby="h-diag">
+        <h2 id="h-diag">Diagnostics</h2>
+        <dl class="facts">
+          <dt>Controlling tab</dt><dd id="diag-controller">–</dd>
+          <dt>Last HTTP command</dt><dd id="diag-command">–</dd>
+          <dt>Last error</dt><dd id="diag-error">–</dd>
+        </dl>
+        <table class="tabs">
+          <thead><tr><th>Tab</th><th>Platform</th><th>Reported</th><th>Effective</th><th>Confidence</th><th>Signals</th><th>Last report</th></tr></thead>
+          <tbody id="diag-tabs"></tbody>
+        </table>
+        <label class="check"><input type="checkbox" id="debug" /> Debug logging (in memory only; never contains conversation content or tokens)</label>
+        <div class="buttons">
+          <button type="button" id="refresh-log" class="secondary small">Show log</button>
+          <button type="button" id="clear-log" class="secondary small">Clear log</button>
+        </div>
+        <pre id="log" hidden></pre>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

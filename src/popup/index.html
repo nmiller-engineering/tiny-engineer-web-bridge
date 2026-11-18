@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiny Engineer Web Bridge</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <img src="../icons/icon.svg" alt="" width="24" height="24" />
+      <h1>Tiny Engineer</h1>
+      <label class="switch" title="Enable or disable the bridge">
+        <input type="checkbox" id="enabled" aria-label="Enable bridge" />
+        <span aria-hidden="true"></span>
+      </label>
+    </header>
+
+    <main>
+      <div class="robot">
+        <span class="pill" id="connection" data-state="unknown">…</span>
+        <span class="muted" id="firmware"></span>
+      </div>
+
+      <dl class="facts">
+        <dt>Robot animation</dt>
+        <dd id="robot-animation">–</dd>
+        <dt>Last sent</dt>
+        <dd id="last-sent">–</dd>
+        <dt>Active source</dt>
+        <dd id="source">No supported AI tab</dd>
+      </dl>
+
+      <p class="notice" id="notice" hidden></p>
+      <p class="result" id="result" role="status" aria-live="polite"></p>
+    </main>
+
+    <footer class="actions">
+      <button type="button" id="test">Test connection</button>
+      <button type="button" id="settings" class="secondary">Settings</button>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>
