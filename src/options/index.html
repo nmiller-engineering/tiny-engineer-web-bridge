@@ -59,9 +59,6 @@
                 <button type="button" id="toggle-token" class="secondary small" aria-pressed="false">Show</button>
               </span>
             </label>
-            <label class="check span-2">
-              <input id="auto-reconnect" type="checkbox" /> Automatically reconnect when the robot becomes reachable again
-            </label>
           </div>
           <p class="error" id="device-error" role="alert"></p>
           <div class="buttons">
@@ -73,6 +70,9 @@
             unencrypted in this Firefox profile. See SECURITY.md.
           </p>
         </form>
+        <label class="check">
+          <input id="auto-reconnect" type="checkbox" /> Automatically reconnect when the robot becomes reachable again
+        </label>
         <dl class="facts">
           <dt>Status</dt><dd><span class="pill" id="connection" data-state="unknown">…</span> <span id="connection-detail" class="muted"></span></dd>
           <dt>Firmware</dt><dd id="firmware">–</dd>
