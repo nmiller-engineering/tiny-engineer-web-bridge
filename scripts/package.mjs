@@ -49,6 +49,12 @@ export async function createXpi(sourceDir, epochSeconds = 315532800) {
   const files = (await listFiles(sourceDir)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   // Firefox does not require manifest.json first, but keep it first anyway.
   files.sort((a, b) => (a === 'manifest.json' ? -1 : b === 'manifest.json' ? 1 : 0));
+  return createZip(sourceDir, files, epochSeconds);
+}
+
+/** Deterministic ZIP of `files` (paths relative to baseDir, in the given order). */
+export async function createZip(baseDir, files, epochSeconds = 315532800) {
+  const sourceDir = baseDir;
   const { time, date } = dosDateTime(epochSeconds);
   const locals = [];
   const centrals = [];

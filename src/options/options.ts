@@ -1,5 +1,6 @@
 import {
   cloneDefaultConfig,
+  DEFAULT_MAPPING,
   DEFAULT_TIMING,
   deviceMatchPattern,
   normalizeOrigin,
@@ -15,15 +16,27 @@ import {
 import type { AnimationTestResult, ConnectionTestResult, StatusSnapshot } from '../shared/messaging';
 import { loadConfig, saveConfig } from '../shared/storage';
 import { AI_STATES, ANIMATIONS, DISABLED, isAnimation, type Platform } from '../shared/types';
-import { $, $input, CONNECTION_LABELS, formatAgo, platformLabel, sendToBackground, setText, STATE_LABELS } from '../shared/ui';
+import { $, $input, CONNECTION_LABELS, connectionTone, formatAgo, platformLabel, sendToBackground, setText, STATE_LABELS, toast } from '../shared/ui';
 
 const POLL_MS = 1500;
 let config: Config = cloneDefaultConfig();
 
-async function update(mutate: (c: Config) => void): Promise<void> {
+async function update(mutate: (c: Config) => void, message = 'Saved'): Promise<void> {
   const next = structuredClone(config);
   mutate(next);
   config = await saveConfig(next);
+  if (message) toast(message);
+}
+
+async function withBusy<T>(button: HTMLButtonElement, task: () => Promise<T>): Promise<T> {
+  button.disabled = true;
+  button.classList.add('busy');
+  try {
+    return await task();
+  } finally {
+    button.disabled = false;
+    button.classList.remove('busy');
+  }
 }
 
 // --------------------------------------------------------------- connection
@@ -48,14 +61,14 @@ function fillTransport(): void {
   ($('#choose-serial') as HTMLButtonElement).disabled = webSerial() === null;
   setText(
     $('#serial-device'),
-    config.device.usbVendorId === null ? 'none chosen (any granted port is used)' : `USB ${hex(config.device.usbVendorId)}:${hex(config.device.usbProductId)}`,
+    config.device.usbVendorId === null ? 'none chosen yet' : `USB ${hex(config.device.usbVendorId)}:${hex(config.device.usbProductId)}`,
   );
 }
 
 for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) {
   radio.addEventListener('change', () => {
     if (!radio.checked) return;
-    void update((c) => (c.device.transport = radio.value === 'serial' ? 'serial' : 'http')).then(fillTransport);
+    void update((c) => (c.device.transport = radio.value === 'serial' ? 'serial' : 'http'), radio.value === 'serial' ? 'Using USB' : 'Using Wi-Fi').then(fillTransport);
   });
 }
 
@@ -72,7 +85,7 @@ $('#choose-serial').addEventListener('click', () => {
         c.device.transport = 'serial';
         c.device.usbVendorId = info.usbVendorId ?? null;
         c.device.usbProductId = info.usbProductId ?? null;
-      });
+      }, 'USB device saved');
       setText($('#serial-error'), '');
       fillTransport();
       await runConnectionTest();
@@ -99,12 +112,26 @@ $('#toggle-token').addEventListener('click', () => {
   $('#toggle-token').setAttribute('aria-pressed', String(show));
 });
 
+for (const id of ['#host', '#port', '#token']) {
+  $input(id).addEventListener('input', () => {
+    $input(id).removeAttribute('aria-invalid');
+    setText($('#device-error'), '');
+  });
+}
+
 $('#device-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
   const host = $input('#host').value.trim().toLowerCase();
   const port = Number($input('#port').value);
   const token = $input('#token').value;
-  const err = validateHost(host) ?? validatePort(port) ?? validateToken(token);
+  const hostErr = validateHost(host);
+  const portErr = validatePort(port);
+  const tokenErr = validateToken(token);
+  for (const [id, e] of [['#host', hostErr], ['#port', portErr], ['#token', tokenErr]] as const) {
+    if (e) $input(id).setAttribute('aria-invalid', 'true');
+    else $input(id).removeAttribute('aria-invalid');
+  }
+  const err = hostErr ?? portErr ?? tokenErr;
   setText($('#device-error'), err ?? '');
   if (err) return;
 
@@ -114,7 +141,7 @@ $('#device-form').addEventListener('submit', (ev) => {
   void browser.permissions.request({ origins: [pattern] }).then(async (granted) => {
     await update((c) => {
       c.device = { ...c.device, transport: 'http', host, port, token, autoReconnect: $input('#auto-reconnect').checked };
-    });
+    }, 'Connection saved');
     fillDevice();
     if (oldPattern && oldPattern !== pattern && !isPatternInUse(oldPattern)) {
       await browser.permissions.remove({ origins: [oldPattern] }).catch(() => undefined);
@@ -139,18 +166,16 @@ $input('#auto-reconnect').addEventListener('change', (ev) => {
 });
 
 async function runConnectionTest(): Promise<void> {
-  const button = $('#test-connection') as HTMLButtonElement;
-  button.disabled = true;
-  setText($('#connection-detail'), 'Testing…');
-  try {
+  const button = $(config.device.transport === 'serial' ? '#test-serial' : '#test-connection') as HTMLButtonElement;
+  await withBusy(button, async () => {
     const res = await sendToBackground<ConnectionTestResult>({ kind: 'testConnection' });
     setText($('#connection-detail'), res.message);
-  } finally {
-    button.disabled = false;
-    void refreshStatus();
-  }
+    toast(res.ok ? 'Robot connected' : 'Connection failed');
+  });
+  void refreshStatus();
 }
 $('#test-connection').addEventListener('click', () => void runConnectionTest());
+$('#test-serial').addEventListener('click', () => void runConnectionTest());
 
 // ---------------------------------------------------------------- platforms
 
@@ -170,16 +195,14 @@ async function renderPermission(platform: Platform): Promise<void> {
   }
   if (!pattern || !config.platforms[platform]) return;
   const granted = await browser.permissions.contains({ origins: [pattern] });
-  if (granted) {
-    el.append(document.createTextNode('✓ site access granted'));
-    el.className = 'perm muted';
-    return;
-  }
-  el.className = 'perm error';
-  el.append(document.createTextNode('Site access not granted'));
+  const tag = document.createElement('span');
+  tag.className = `tag ${granted ? 'ok' : 'bad'}`;
+  tag.textContent = granted ? 'Access granted' : 'No site access';
+  el.append(tag);
+  if (granted) return;
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'small';
+  btn.className = 'btn secondary sm';
   btn.textContent = 'Grant';
   btn.addEventListener('click', () => {
     void browser.permissions.request({ origins: [pattern] }).then(() => renderPermissions());
@@ -208,7 +231,7 @@ for (const p of ['chatgpt', 'claude'] as const) {
     void ask.then(async () => {
       await update((c) => {
         c.platforms[p] = on;
-      });
+      }, `${platformLabel(p)} ${on ? 'on' : 'off'}`);
       await renderPermissions();
     });
   });
@@ -238,7 +261,7 @@ function saveOpenWebUI(enable: boolean): void {
         await browser.permissions.remove({ origins: [oldPattern] }).catch(() => undefined);
       }
     }
-    if (enable && !granted) setText($('#openwebui-error'), 'Firefox access to this origin was not granted.');
+    if (enable && !granted) setText($('#openwebui-error'), 'Firefox access to this address was not granted. Press “Save & allow access” and choose “Allow”.');
     fillPlatforms();
   });
 }
@@ -263,14 +286,38 @@ $input('#pf-openwebui').addEventListener('change', (ev) => {
 
 // ------------------------------------------------------------------ mapping
 
+const STATE_HINTS: Record<string, string> = {
+  idle: 'Nothing is happening',
+  user_typing: 'You are writing a prompt',
+  thinking: 'Request sent, no answer visible yet',
+  responding: 'The answer is being written',
+  tool_use: 'A tool or web search is running',
+  completed: 'The answer just finished',
+  error: 'Something went wrong',
+  unknown: 'The page layout is not recognized',
+};
+
 function buildMapping(): void {
   const body = $('#mapping-body');
   body.replaceChildren();
   for (const state of AI_STATES) {
-    const tr = document.createElement('tr');
-    const name = document.createElement('td');
-    name.textContent = STATE_LABELS[state] ?? state;
-    const pick = document.createElement('td');
+    const row = document.createElement('div');
+    row.className = 'map-row';
+
+    const name = document.createElement('div');
+    name.className = 'map-state';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.dataset.state = state;
+    const text = document.createElement('p');
+    const title = document.createElement('strong');
+    title.textContent = STATE_LABELS[state] ?? state;
+    const desc = document.createElement('span');
+    desc.className = 'desc';
+    desc.textContent = STATE_HINTS[state] ?? '';
+    text.append(title, document.createElement('br'), desc);
+    name.append(dot, text);
+
     const select = document.createElement('select');
     select.setAttribute('aria-label', `Animation for ${STATE_LABELS[state]}`);
     for (const value of [DISABLED, ...ANIMATIONS]) {
@@ -283,37 +330,40 @@ function buildMapping(): void {
     select.addEventListener('change', () => {
       void update((c) => (c.mapping[state] = sanitizeMappingTarget(select.value, c.mapping[state])));
     });
-    pick.append(select);
-    const test = document.createElement('td');
+
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'secondary small';
+    btn.className = 'btn secondary sm';
     btn.textContent = 'Test';
+    btn.setAttribute('aria-label', `Test animation for ${STATE_LABELS[state]}`);
     btn.addEventListener('click', async () => {
       const value = select.value;
       if (!isAnimation(value)) {
-        setText($('#anim-result'), 'Nothing to test for “Do nothing”.');
+        toast('Nothing to play for “Do nothing”');
         return;
       }
-      const res = await sendToBackground<AnimationTestResult>({ kind: 'testAnimation', animation: value });
-      setText($('#anim-result'), res.message);
+      const res = await withBusy(btn, () => sendToBackground<AnimationTestResult>({ kind: 'testAnimation', animation: value }));
+      toast(res.ok ? `Playing “${value}”` : res.message);
     });
-    test.append(btn);
-    tr.append(name, pick, test);
-    body.append(tr);
+    row.append(name, select, btn);
+    body.append(row);
   }
 }
 
+$('#reset-mapping').addEventListener('click', () => {
+  void update((c) => (c.mapping = { ...DEFAULT_MAPPING }), 'Animations restored').then(buildMapping);
+});
+
 // ------------------------------------------------------- behaviour / timing
 
-const TIMING_LABELS: Record<keyof TimingConfig, string> = {
-  debounceMs: 'UI debounce (ms)',
-  minStableMs: 'Minimum stable state (ms)',
-  completionMs: 'Completion animation time (ms)',
-  requestTimeoutMs: 'Robot request timeout (ms)',
-  staleMs: 'Lost-signal timeout (ms)',
-  keepaliveMs: 'Continuous-animation keepalive (ms, 0 = off)',
-  typingIdleMs: 'Typing ends after (ms)',
+const TIMING_LABELS: Record<keyof TimingConfig, [string, string]> = {
+  debounceMs: ['Page debounce', 'Ignore UI flicker shorter than this'],
+  minStableMs: ['Minimum stable state', 'A state must last this long before the robot reacts'],
+  completionMs: ['Completion time', 'How long “Completed” is shown'],
+  requestTimeoutMs: ['Robot timeout', 'Give up on a robot request after'],
+  staleMs: ['Lost-signal timeout', 'Back to rest if a busy tab goes silent'],
+  keepaliveMs: ['Long-answer keepalive', 'Refresh long animations (0 = off)'],
+  typingIdleMs: ['Typing ends after', 'Keyboard pause that ends “User typing”'],
 };
 
 function buildTiming(): void {
@@ -321,8 +371,20 @@ function buildTiming(): void {
   host.replaceChildren();
   for (const key of Object.keys(DEFAULT_TIMING) as (keyof TimingConfig)[]) {
     const label = document.createElement('label');
-    label.textContent = TIMING_LABELS[key];
+    label.className = 'field';
+    const [title, hint] = TIMING_LABELS[key];
+    const t = document.createElement('span');
+    t.className = 'label';
+    t.textContent = title;
+    const h = document.createElement('span');
+    h.className = 'hint';
+    h.textContent = hint;
+    const wrap = document.createElement('span');
+    wrap.className = 'unit';
+    const unit = document.createElement('span');
+    unit.textContent = 'ms';
     const input = document.createElement('input');
+    input.className = 'input';
     input.type = 'number';
     const [min, max] = TIMING_BOUNDS[key];
     input.min = String(min);
@@ -334,13 +396,14 @@ function buildTiming(): void {
         input.value = String(config.timing[key]); // show clamped value
       });
     });
-    label.append(input);
+    wrap.append(input, unit);
+    label.append(t, wrap, h);
     host.append(label);
   }
 }
 
 $('#reset-timing').addEventListener('click', () => {
-  void update((c) => (c.timing = { ...DEFAULT_TIMING })).then(buildTiming);
+  void update((c) => (c.timing = { ...DEFAULT_TIMING }), 'Timing restored').then(buildTiming);
 });
 
 for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="arbitration"]')) {
@@ -359,7 +422,7 @@ function fillBehaviour(): void {
 // -------------------------------------------------------------- diagnostics
 
 $input('#debug').addEventListener('change', (ev) => {
-  void update((c) => (c.debugLogging = (ev.target as HTMLInputElement).checked));
+  void update((c) => (c.debugLogging = (ev.target as HTMLInputElement).checked), (ev.target as HTMLInputElement).checked ? 'Debug log on' : 'Debug log off');
 });
 
 $('#refresh-log').addEventListener('click', async () => {
@@ -375,7 +438,8 @@ $('#clear-log').addEventListener('click', async () => {
 });
 
 $input('#enabled').addEventListener('change', (ev) => {
-  void update((c) => (c.enabled = (ev.target as HTMLInputElement).checked));
+  const on = (ev.target as HTMLInputElement).checked;
+  void update((c) => (c.enabled = on), on ? 'Bridge on' : 'Bridge paused');
 });
 
 async function refreshStatus(): Promise<void> {
@@ -386,10 +450,13 @@ async function refreshStatus(): Promise<void> {
     return;
   }
   $input('#enabled').checked = s.enabled;
+  document.body.classList.toggle('off', !s.enabled);
+  $('#getting-started').hidden = s.connection !== 'unconfigured' && s.connection !== 'unknown' && s.connection !== 'no-permission';
   const pill = $('#connection');
-  pill.dataset.state = s.connection;
-  setText(pill, CONNECTION_LABELS[s.connection] ?? s.connection);
-  if (s.connectionDetail) setText($('#connection-detail'), s.connectionDetail);
+  pill.dataset.tone = connectionTone(s.connection);
+  pill.dataset.live = String(s.connection === 'connected' && s.enabled);
+  setText(pill, `Robot: ${CONNECTION_LABELS[s.connection] ?? s.connection}`);
+  setText($('#connection-detail'), s.connectionDetail || (CONNECTION_LABELS[s.connection] ?? s.connection));
   setText($('#firmware'), s.firmwareVersion ?? '–');
   setText($('#auth-required'), s.authRequired === null ? '–' : s.authRequired ? 'yes' : 'no');
   setText($('#robot-animation'), s.robotAnimation ?? '–');
@@ -415,8 +482,8 @@ async function refreshStatus(): Promise<void> {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = 7;
-    td.className = 'muted';
-    td.textContent = 'No supported AI tab is reporting.';
+    td.className = 'empty';
+    td.textContent = 'No AI tab is reporting yet — open ChatGPT, Claude or your Open WebUI.';
     tr.append(td);
     body.append(tr);
   }
@@ -431,11 +498,12 @@ async function refreshStatus(): Promise<void> {
       t.signals.join(', ') || '–',
       formatAgo(Date.now() - t.ageMs),
     ];
-    for (const c of cells) {
+    cells.forEach((c, i) => {
       const td = document.createElement('td');
       td.textContent = c;
+      if (i === 5) td.className = 'signals';
       tr.append(td);
-    }
+    });
     body.append(tr);
   }
 }
@@ -444,6 +512,7 @@ async function refreshStatus(): Promise<void> {
 
 async function init(): Promise<void> {
   config = await loadConfig();
+  setText($('#version'), `v${browser.runtime.getManifest().version}`);
   $input('#enabled').checked = config.enabled;
   $input('#debug').checked = config.debugLogging;
   fillDevice();

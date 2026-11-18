@@ -4,11 +4,11 @@ A privacy-focused Firefox extension that watches the activity of web AI assistan
 
 The robot is driven **directly from the extension** over your local **Wi-Fi (HTTP)** or, optionally, a **USB cable (Web Serial)**. No API keys, no server, no cloud, no telemetry.
 
-| Popup | Settings |
-| --- | --- |
-| ![Popup (dark)](docs/screenshots/popup-dark.png) | ![Settings (light)](docs/screenshots/options-light.png) |
+| Popup | First start | Settings |
+| --- | --- | --- |
+| ![Popup showing live AI activity](docs/screenshots/popup-light.png) | ![Popup before setup](docs/screenshots/popup-setup.png) | ![Settings page (dark)](docs/screenshots/options-dark.png) |
 
-> Screenshots were rendered from the built pages with a stubbed browser API (sample data), not captured from a live Firefox session.
+> Screenshots are rendered from the built pages with sample data, not captured from a live Firefox session.
 
 ## Features
 
@@ -38,7 +38,15 @@ Details, selectors and limitations: [docs/DETECTION.md](docs/DETECTION.md).
 - A provisioned Tiny Engineer robot (Wi-Fi mode, or USB-only/any mode for serial).
 - For development: Node.js ≥ 20.19 and npm.
 
-## Installation on Fedora
+## Install a release
+
+1. Download `tiny-engineer-web-bridge-<version>-signed.xpi` from the [Releases](https://github.com/nmiller-engineering/tiny-engineer-web-bridge/releases) page (present when the release was signed by Mozilla).
+2. In Firefox open `about:addons` → gear menu → **Install Add-on From File…** and pick the file.
+3. The settings page opens automatically — follow the three steps shown there.
+
+Unsigned `.xpi` files from Releases only install permanently in Firefox Developer Edition/Nightly; in normal Firefox use them as a temporary add-on (below). `SHA256SUMS.txt` lets you verify downloads; `…-source.zip` contains the exact sources.
+
+## Installation on Fedora (from source)
 
 ### 1. Build
 
@@ -126,10 +134,18 @@ npm run test           # unit, detector (jsdom), integration tests
 npm run lint           # ESLint + TypeScript
 npm run lint:firefox   # Mozilla addons-linter (web-ext lint) on the build
 npm run package        # reproducible .xpi in web-ext-artifacts/
+npm run package:source # reproducible source archive (for Mozilla review)
+npm run release:check  # everything a release needs, in one go
 npm run mock-robot -- --port 8080 [--token secret]   # fake robot for manual tests
 ```
 
 With the mock robot running, configure host `127.0.0.1`, port `8080` in the extension to watch the commands it receives.
+
+### Releasing
+
+1. Update `version` in `package.json` and add a section to `CHANGELOG.md`.
+2. Run `npm run release:check`.
+3. Commit, then push a tag `vX.Y.Z` on `main`. The *Release* workflow verifies, packages, signs (if the repository secrets `AMO_JWT_ISSUER`/`AMO_JWT_SECRET` exist) and publishes a GitHub Release with checksums.
 
 Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) · Security model: [SECURITY.md](SECURITY.md) · Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) · Manual test checklist: [docs/MANUAL_TESTING.md](docs/MANUAL_TESTING.md)
 
@@ -176,6 +192,7 @@ Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) · Security model: [SECURITY.md
 - Content scripts send only enumerated values (platform, state, confidence, fixed signal names, sequence number). They have no access to configuration, tokens, storage or the network (enforced by lint rules and tests).
 - The only outbound traffic is to **your robot**, on four fixed endpoints (or three serial ops).
 - Settings live in `browser.storage.local` of your Firefox profile (unencrypted, never synced).
+- Full policy: [PRIVACY.md](PRIVACY.md).
 
 ## Attribution
 

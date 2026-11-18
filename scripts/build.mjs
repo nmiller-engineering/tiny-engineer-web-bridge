@@ -27,7 +27,7 @@ const entryPoints = {
   'options/options': 'src/options/options.ts',
 };
 
-const STATIC_FILES = ['popup/index.html', 'popup/popup.css', 'options/index.html', 'options/options.css', 'icons/icon.svg'];
+const STATIC_FILES = ['shared/ui.css', 'popup/index.html', 'popup/popup.css', 'options/index.html', 'options/options.css', 'icons/icon.svg', 'icons/icon-16.png', 'icons/icon-32.png', 'icons/icon-48.png', 'icons/icon-96.png', 'icons/icon-128.png'];
 
 /** esbuild options shared with tests/architecture.test.ts. */
 export const buildOptions = {

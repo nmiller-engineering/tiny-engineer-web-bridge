@@ -41,13 +41,43 @@ export const STATE_LABELS: Record<string, string> = {
 };
 
 export const CONNECTION_LABELS: Record<string, string> = {
-  unconfigured: 'Not configured',
-  'no-permission': 'Access not granted',
+  unconfigured: 'Not set up',
+  'no-permission': 'Access needed',
   unknown: 'Not checked yet',
   connected: 'Connected',
-  disconnected: 'Disconnected',
+  disconnected: 'Unreachable',
   error: 'Error',
 };
+
+/** Colour tone for a connection state (matches .pill[data-tone]). */
+export function connectionTone(connection: string): 'ok' | 'warn' | 'bad' | 'info' {
+  switch (connection) {
+    case 'connected':
+      return 'ok';
+    case 'unknown':
+    case 'unconfigured':
+      return 'info';
+    case 'disconnected':
+      return 'warn';
+    default:
+      return 'bad';
+  }
+}
+
+/** Short confirmation bubble at the bottom of the page. */
+export function toast(message: string): void {
+  let el = document.querySelector<HTMLElement>('.toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'toast';
+    el.setAttribute('role', 'status');
+    document.body.append(el);
+  }
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(Number(el.dataset.timer));
+  el.dataset.timer = String(setTimeout(() => el?.classList.remove('show'), 1600));
+}
 
 /** Replace children with plain text nodes / elements — never innerHTML. */
 export function setText(el: HTMLElement, text: string): void {

@@ -1,6 +1,6 @@
 {
   "name": "tiny-engineer-web-bridge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Firefox extension that mirrors ChatGPT, Claude and Open WebUI activity as Tiny Engineer robot animations.",
   "private": true,
   "license": "MIT",
@@ -18,6 +18,8 @@
     "lint": "eslint . && tsc --noEmit",
     "lint:firefox": "npm run build && web-ext lint --source-dir dist",
     "package": "npm run build && node scripts/package.mjs",
+    "package:source": "node scripts/package-source.mjs",
+    "release:check": "npm run lint && npm test && npm run lint:firefox && npm run package && npm run package:source",
     "mock-robot": "node tools/mock-tiny-engineer.mjs"
   },
   "devDependencies": {

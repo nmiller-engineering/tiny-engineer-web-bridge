@@ -66,7 +66,9 @@ Observing network-request metadata (`webRequest`) was considered. It would requi
 
 Verified: no `innerHTML`/`eval`/`new Function`/`document.write` in shipped code; no runtime dependencies (`npm audit --omit=dev`: 0); no `web_accessible_resources` or `externally_connectable`; content-script bundles contain no network, serial or storage APIs; privileged requests accepted only from the extension's own pages; content messages bound to the sender's origin.
 
-Open recommendations: pin GitHub Actions to commit SHAs; development-only advisory in `picomatch` (build tooling, not shipped); live verification in Firefox (CSP without `upgrade-insecure-requests`, Web Serial availability) is still pending.
+Open recommendations: development-only advisory in `picomatch` (build tooling, not shipped); live verification in Firefox (CSP without `upgrade-insecure-requests`, Web Serial availability) is still pending.
+
+Release hardening (v1.0.0): GitHub Actions pinned to commit SHAs, checkout without persisted credentials, least-privilege workflow permissions, reproducible XPI and source archives with published SHA-256 checksums.
 
 ## Reporting a vulnerability
 

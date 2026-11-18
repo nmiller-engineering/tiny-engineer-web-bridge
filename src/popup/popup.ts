@@ -1,48 +1,58 @@
 import type { ConnectionTestResult, StatusSnapshot } from '../shared/messaging';
 import { loadConfig, saveConfig } from '../shared/storage';
-import { $, $input, CONNECTION_LABELS, formatAgo, platformLabel, sendToBackground, setText, STATE_LABELS } from '../shared/ui';
+import { $, $input, connectionTone, formatAgo, platformLabel, sendToBackground, setText, STATE_LABELS, CONNECTION_LABELS } from '../shared/ui';
 
 const POLL_MS = 1500;
+let transport: 'http' | 'serial' = 'http';
+
+function show(el: HTMLElement, text: string, tone: string): void {
+  el.dataset.tone = tone;
+  setText(el, text);
+  el.hidden = text === '';
+}
 
 async function refresh(): Promise<void> {
-  let status: StatusSnapshot;
+  let s: StatusSnapshot;
   try {
-    status = await sendToBackground<StatusSnapshot>({ kind: 'getStatus' });
+    s = await sendToBackground<StatusSnapshot>({ kind: 'getStatus' });
   } catch {
+    show($('#notice'), 'The extension background is not reachable. Try reopening the popup.', 'bad');
     return;
   }
-  $input('#enabled').checked = status.enabled;
+  document.body.classList.toggle('off', !s.enabled);
+  $input('#enabled').checked = s.enabled;
 
   const conn = $('#connection');
-  conn.dataset.state = status.connection;
-  setText(conn, CONNECTION_LABELS[status.connection] ?? status.connection);
-  conn.title = status.connectionDetail;
-  setText($('#firmware'), status.firmwareVersion ? `firmware ${status.firmwareVersion}` : '');
+  conn.dataset.tone = connectionTone(s.connection);
+  conn.dataset.live = String(s.connection === 'connected' && s.enabled);
+  setText(conn, CONNECTION_LABELS[s.connection] ?? s.connection);
+  conn.title = s.connectionDetail;
+  const via = transport === 'serial' ? 'USB' : 'Wi-Fi';
+  setText($('#link'), s.connection === 'unconfigured' ? '' : `${via}${s.firmwareVersion ? ` · ${s.firmwareVersion}` : ''}`);
 
-  setText($('#robot-animation'), status.robotAnimation ?? '–');
-  setText(
-    $('#last-sent'),
-    status.lastSent
-      ? `${status.lastSent.animation}${status.lastSent.state ? ` (${STATE_LABELS[status.lastSent.state]})` : ''} · ${formatAgo(status.lastSent.at)}`
-      : '–',
-  );
+  const unconfigured = s.connection === 'unconfigured';
+  $('#welcome').hidden = !unconfigured;
+  $('#paused').hidden = unconfigured || s.enabled;
+  $('#activity').hidden = unconfigured || !s.enabled;
+  $('#test').hidden = unconfigured;
+  document.querySelector('.actions')?.classList.toggle('single', unconfigured);
+
+  const state = s.controller?.state ?? 'idle';
+  $('#state').dataset.state = state;
+  setText($('#state-label'), STATE_LABELS[state] ?? state);
   setText(
     $('#source'),
-    status.controller
-      ? `${platformLabel(status.controller.platform)} · ${STATE_LABELS[status.controller.state]} · ${Math.round(status.controller.confidence * 100)}%`
-      : status.enabled
-        ? 'No supported AI tab'
-        : 'Bridge disabled',
+    s.controller
+      ? `${platformLabel(s.controller.platform)} · ${Math.round(s.controller.confidence * 100)} % confidence`
+      : 'No supported AI tab open',
   );
+  setText($('#robot-animation'), s.robotAnimation ?? s.lastSent?.animation ?? '–');
+  setText($('#last-sent'), s.lastSent ? `sent ${formatAgo(s.lastSent.at)}` : '');
 
-  const notice = $('#notice');
-  let text = '';
-  if (status.connection === 'unconfigured') text = 'Enter your Tiny Engineer address in Settings.';
-  else if (status.connection === 'no-permission')
-    text = status.connectionDetail || 'Firefox needs your permission to contact the robot. Open Settings → “Save & allow access”.';
-  else if (status.connection === 'error' || status.connection === 'disconnected') text = status.connectionDetail;
-  notice.hidden = text === '';
-  setText(notice, text);
+  let notice = '';
+  if (s.connection === 'no-permission') notice = s.connectionDetail || 'Firefox needs your permission to reach the robot. Open Settings → “Save & allow access”.';
+  else if ((s.connection === 'error' || s.connection === 'disconnected') && s.enabled) notice = s.connectionDetail;
+  show($('#notice'), notice, s.connection === 'disconnected' ? 'warn' : 'bad');
 }
 
 $input('#enabled').addEventListener('change', async (ev) => {
@@ -55,22 +65,28 @@ $input('#enabled').addEventListener('change', async (ev) => {
 $('#test').addEventListener('click', async () => {
   const button = $('#test') as HTMLButtonElement;
   button.disabled = true;
-  setText($('#result'), 'Testing…');
+  button.classList.add('busy');
   try {
     const res = await sendToBackground<ConnectionTestResult>({ kind: 'testConnection' });
-    setText($('#result'), res.message);
+    show($('#result'), res.message, res.ok ? 'ok' : 'bad');
   } catch {
-    setText($('#result'), 'Background script not reachable.');
+    show($('#result'), 'Background script not reachable.', 'bad');
   } finally {
     button.disabled = false;
+    button.classList.remove('busy');
     void refresh();
   }
 });
 
-$('#settings').addEventListener('click', () => {
+const openSettings = () => {
   void browser.runtime.openOptionsPage();
   window.close();
-});
+};
+$('#settings').addEventListener('click', openSettings);
+$('#setup').addEventListener('click', openSettings);
 
-void refresh();
+void loadConfig().then((c) => {
+  transport = c.device.transport;
+  void refresh();
+});
 setInterval(() => void refresh(), POLL_MS);

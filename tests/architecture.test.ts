@@ -57,3 +57,18 @@ describe('manifest', () => {
     expect(csp).not.toMatch(/unsafe-eval|unsafe-inline|https?:\/\/[a-z]/);
   });
 });
+
+describe('release assets', () => {
+  const manifest = JSON.parse(readFileSync(path.join(root, 'src/manifest.json'), 'utf8'));
+
+  it('references icons that exist, including the 128 px listing icon', () => {
+    const icons: Record<string, string> = { ...manifest.icons, ...manifest.action.default_icon };
+    expect(Object.keys(manifest.icons)).toContain('128');
+    for (const file of Object.values(icons)) expect(() => readFileSync(path.join(root, 'src', file))).not.toThrow();
+  });
+
+  it('documents the current version in the changelog', () => {
+    const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+    expect(readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8')).toContain(`## [${pkg.version}]`);
+  });
+});
