@@ -127,7 +127,21 @@ describe('SerialClient (fake firmware)', () => {
     expect(choosePort([a, b], { usbVendorId: 0x1a86, usbProductId: 0x7523 })).toBe(a);
     expect(choosePort([a, b], { usbVendorId: null, usbProductId: null })).toBe(b);
     expect(choosePort([a], { usbVendorId: null, usbProductId: null })).toBe(a);
-    expect(choosePort([a], { usbVendorId: 0x303a, usbProductId: null })).toBe(a); // fall back to the only port
+    expect(choosePort([a], { usbVendorId: 0x303a, usbProductId: null })).toBeNull(); // chosen device absent → no fallback
     expect(choosePort([], { usbVendorId: null, usbProductId: null })).toBeNull();
+  });
+});
+
+describe('serial device selection safety', () => {
+  it('never talks to a different device than the one chosen', async () => {
+    const other = new FakeFirmwarePort({ usbVendorId: 0x2341, usbProductId: 0x0043 }); // e.g. an Arduino
+    const client = new SerialClient({
+      provider: () => fakeProvider([other]),
+      selection: () => ({ usbVendorId: 0x303a, usbProductId: 0x1001 }),
+      timeoutMs: () => 200,
+    });
+    expect(await client.setAnimation('ring')).toMatchObject({ ok: false, error: 'no-permission' });
+    expect(other.opens).toBe(0);
+    expect(other.received).toEqual([]);
   });
 });

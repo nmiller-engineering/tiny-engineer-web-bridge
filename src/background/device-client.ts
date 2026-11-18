@@ -148,7 +148,9 @@ export interface DeviceClientDeps {
 function readJsonField<T>(o: unknown, key: string, guard: (v: unknown) => v is T): T | null {
   if (typeof o !== 'object' || o === null) return null;
   const v = (o as Record<string, unknown>)[key];
-  return guard(v) ? v : null;
+  if (!guard(v)) return null;
+  // Strings from the device end up in the UI and in storage.session: keep them short.
+  return (typeof v === 'string' ? v.slice(0, 64) : v) as T;
 }
 const isString = (v: unknown): v is string => typeof v === 'string';
 const isBool = (v: unknown): v is boolean => typeof v === 'boolean';

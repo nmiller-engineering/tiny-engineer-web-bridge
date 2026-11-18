@@ -77,10 +77,12 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** Pick the granted port that matches the saved USB ids (or the only/Espressif one). */
 export function choosePort(ports: SerialPortLike[], sel: SerialSelection): SerialPortLike | null {
   if (sel.usbVendorId !== null) {
-    const match = ports.find(
-      (p) => p.getInfo().usbVendorId === sel.usbVendorId && (sel.usbProductId === null || p.getInfo().usbProductId === sel.usbProductId),
+    // A device was chosen explicitly: never send frames to any other device.
+    return (
+      ports.find(
+        (p) => p.getInfo().usbVendorId === sel.usbVendorId && (sel.usbProductId === null || p.getInfo().usbProductId === sel.usbProductId),
+      ) ?? null
     );
-    if (match) return match;
   }
   if (ports.length === 1) return ports[0]!;
   return ports.find((p) => p.getInfo().usbVendorId === ESPRESSIF_VID) ?? null;
@@ -107,7 +109,7 @@ export class SerialClient implements RobotClient {
   }
 
   getHealth(): Promise<DeviceResult<HealthInfo>> {
-    return this.run('health', {}, (j) => ({ version: typeof j.version === 'string' ? j.version : null }));
+    return this.run('health', {}, (j) => ({ version: typeof j.version === 'string' ? j.version.slice(0, 64) : null }));
   }
 
   /** The serial protocol has no read-only "current animation" op. */
@@ -117,7 +119,7 @@ export class SerialClient implements RobotClient {
 
   setAnimation(animation: Animation): Promise<DeviceResult<AnimInfo>> {
     if (!isAnimation(animation)) return Promise.resolve({ ok: false, error: 'invalid-target', message: 'Unknown animation.' });
-    return this.run('anim', { name: animation }, (j) => ({ animation: typeof j.animation === 'string' ? j.animation : null }));
+    return this.run('anim', { name: animation }, (j) => ({ animation: typeof j.animation === 'string' ? j.animation.slice(0, 32) : null }));
   }
 
   async close(): Promise<void> {

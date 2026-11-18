@@ -47,12 +47,26 @@ No `tabs`, `<all_urls>`, `webRequest`, `cookies`, `history` or `clipboard` permi
 
 - No telemetry, analytics, remote logging, or remote code. All scripts are bundled; the manifest declares `data_collection_permissions: none`.
 - Conversation content, passwords, cookies, AI session tokens and auth headers are never read or collected.
-- Settings are stored in `browser.storage.local` of the Firefox profile — **not encrypted** — and never in `storage.sync`. Content scripts never access storage.
+- Settings are stored in `browser.storage.local` of the Firefox profile — **not encrypted** — and never in `storage.sync`.
+- Residual risk: Firefox makes `storage.local` available to *all* of an extension's contexts, including its own content scripts. Our content-script code never touches storage (enforced by lint + bundle tests), and page JavaScript cannot reach the content script's `browser` object (Xray isolation). A bug that allowed code execution *inside* our content script could, however, read the token. Keep the robot token unique (do not reuse a password).
 - The debug log is off by default, in memory only, capped, and contains only states, platform names, tab ids, animation names and error categories. Tab titles/URLs are not stored.
 
 ## Optional advanced (network) detection
 
 Observing network-request metadata (`webRequest`) was considered. It would require broad host permissions and request-level access to AI sites, and DOM signals already provide the needed transitions. It is **not implemented**; no request bodies are intercepted and `fetch` is not patched.
+
+## Review log
+
+**2026-11-18 internal review** (code + build artifacts). Fixed:
+- USB: if a specific device had been chosen but was absent, the client fell back to any single granted serial port and would have sent protocol frames to an unrelated device. Now it refuses (`no-permission`).
+- Detectors no longer read the `aria-label` of arbitrary buttons (sidebar labels can contain chat titles); only controls whose label starts with “stop” are inspected, selected by the CSS engine.
+- Strings from the robot (firmware version, animation name) are length-limited before reaching UI and session storage.
+- State restored from `storage.session` after a background restart is validated record by record.
+- Disabling Open WebUI now revokes the site permission for its origin.
+
+Verified: no `innerHTML`/`eval`/`new Function`/`document.write` in shipped code; no runtime dependencies (`npm audit --omit=dev`: 0); no `web_accessible_resources` or `externally_connectable`; content-script bundles contain no network, serial or storage APIs; privileged requests accepted only from the extension's own pages; content messages bound to the sender's origin.
+
+Open recommendations: pin GitHub Actions to commit SHAs; development-only advisory in `picomatch` (build tooling, not shipped); live verification in Firefox (CSP without `upgrade-insecure-requests`, Web Serial availability) is still pending.
 
 ## Reporting a vulnerability
 

@@ -12,7 +12,7 @@ import type {
   StatusSnapshot,
   TabStatus,
 } from '../shared/messaging';
-import { ANIMATION_KIND, isAIState, isAnimation, type Animation, type Platform } from '../shared/types';
+import { ANIMATION_KIND, isAIState, isAnimation, isPlatform, isSignalName, type Animation, type Platform } from '../shared/types';
 import { CommandQueue, type SendOutcome } from './command-queue';
 import { DeviceClient, type DeviceErrorKind, type DeviceTarget, type RobotClient } from './device-client';
 import { SerialClient, type SerialProvider } from './serial-client';
@@ -409,12 +409,41 @@ export class Bridge {
     return { registry: this.registry.snapshot(), state: this.state.snapshot(), queue: this.queue.snapshot(), status: { ...this.status } };
   }
 
-  restore(snap: BridgeSnapshot): void {
+  restore(raw: BridgeSnapshot): void {
+    const snap = sanitizeSnapshot(raw);
     this.registry.restore(snap.registry);
     this.state.restore(snap.state);
     this.queue.restore(snap.queue);
     this.status = { ...this.status, ...snap.status };
   }
+}
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/** Keep only well-formed tab records from restored session data. */
+export function sanitizeSnapshot(snap: BridgeSnapshot): BridgeSnapshot {
+  const records = snap.registry.records
+    .filter(
+      (r) =>
+        typeof r === 'object' &&
+        r !== null &&
+        Number.isSafeInteger(r.tabId) &&
+        isPlatform(r.platform) &&
+        isAIState(r.state) &&
+        isNum(r.confidence) &&
+        isNum(r.stateSince) &&
+        isNum(r.lastSeen) &&
+        isNum(r.seq) &&
+        Array.isArray(r.signals),
+    )
+    .map((r) => ({ ...r, signals: r.signals.filter(isSignalName) }));
+  const focusOrder = snap.registry.focusOrder.filter((id) => Number.isSafeInteger(id)).slice(0, 64);
+  const believed = isAnimation(snap.queue.believed) ? snap.queue.believed : null;
+  return {
+    ...snap,
+    registry: { records, focusOrder },
+    queue: { believed, believedAt: isNum(snap.queue.believedAt) ? snap.queue.believedAt : 0 },
+  };
 }
 
 /** Defensive check for data read back from storage.session. */

@@ -246,8 +246,19 @@ function saveOpenWebUI(enable: boolean): void {
 $('#save-openwebui').addEventListener('click', () => saveOpenWebUI(true));
 $input('#pf-openwebui').addEventListener('change', (ev) => {
   const on = (ev.target as HTMLInputElement).checked;
-  if (on) saveOpenWebUI(true);
-  else void update((c) => (c.platforms.openwebui = false)).then(fillPlatforms);
+  if (on) {
+    saveOpenWebUI(true);
+    return;
+  }
+  void update((c) => (c.platforms.openwebui = false)).then(async () => {
+    // Least privilege: give back site access that is no longer needed.
+    if (config.platforms.openwebuiOrigin) {
+      const pattern = originToMatchPattern(config.platforms.openwebuiOrigin);
+      const robotPattern = config.device.host ? deviceMatchPattern(config.device.host) : null;
+      if (pattern !== robotPattern) await browser.permissions.remove({ origins: [pattern] }).catch(() => undefined);
+    }
+    fillPlatforms();
+  });
 });
 
 // ------------------------------------------------------------------ mapping

@@ -161,6 +161,8 @@ function closestAny(el: Element, selectors: string[]): Element | null {
 }
 
 function matchesLabelRule(button: Element, rules: LabelRule[], doc: Document): boolean {
+  // Never look at labels of other controls (they may contain chat titles).
+  if (rules.length === 0 || !button.matches('[aria-label^="stop" i]')) return false;
   const label = button.getAttribute('aria-label')?.trim();
   if (!label) return false;
   return rules.some((r) => {
@@ -374,7 +376,8 @@ export class DomDetector implements AIDetector {
     const p = this.profile;
     let stop = anyShown(doc, p.stopButtons);
     if (!stop && p.stopLabels.length > 0) {
-      stop = safeQueryAll(doc, 'button[aria-label], [role="button"][aria-label]').some(
+      // Only elements whose label starts with "stop" are ever inspected.
+      stop = safeQueryAll(doc, 'button[aria-label^="stop" i], [role="button"][aria-label^="stop" i]').some(
         (b) => isShown(b) && matchesLabelRule(b, p.stopLabels, doc),
       );
     }

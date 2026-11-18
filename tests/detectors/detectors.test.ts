@@ -248,3 +248,26 @@ describe('platform specifics', () => {
     expect(json).not.toMatch(/Partial|token|Question|Hello/);
   });
 });
+
+describe('privacy of label inspection', () => {
+  it('reads aria-labels only of controls whose label starts with "stop"', async () => {
+    loadFixture('chatgpt', 'idle');
+    const titled = document.createElement('button');
+    titled.setAttribute('aria-label', 'Open conversation options for My secret project');
+    document.querySelector('nav')!.append(titled);
+    const reads: string[] = [];
+    const orig = Element.prototype.getAttribute;
+    Element.prototype.getAttribute = function (name: string) {
+      if (name === 'aria-label') reads.push(orig.call(this, name) ?? '');
+      return orig.call(this, name);
+    };
+    try {
+      start(chatgptProfile);
+      titled.click();
+      await tick(1000);
+    } finally {
+      Element.prototype.getAttribute = orig;
+    }
+    expect(reads.some((r) => r.includes('secret'))).toBe(false);
+  });
+});
