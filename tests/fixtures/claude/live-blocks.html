@@ -1,0 +1,14 @@
+<!-- Structure from a live claude.ai detection report (2026-11-19): message container and transcript items
+     ([data-item-key], text items contain div.prose). The status headers of non-text items (button[aria-expanded])
+     are an ASSUMPTION to be verified; all text is synthetic. Items are appended by the tests. -->
+<div id="root"><main>
+  <div data-testid="user-message"><p>Earlier question</p></div>
+  <div class="group/message-row relative flex w-full min-w-0 flex-col" data-testid="assistant-message" data-is-streaming="true" data-busy="true" aria-busy="true">
+    <div class="flex min-w-0 flex-col gap-5">
+      <div class="min-w-0" data-transcript-live="">
+        <div class="grid grid-cols-1 content-start gap-5" id="transcript"></div>
+      </div>
+    </div>
+  </div>
+  <fieldset><div class="ProseMirror" contenteditable="true"><p></p></div><button type="button" aria-label="Send message"></button></fieldset>
+</main></div>

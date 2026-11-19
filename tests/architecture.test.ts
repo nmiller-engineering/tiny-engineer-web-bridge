@@ -32,9 +32,35 @@ describe('content-script bundles', () => {
       expect(code).not.toMatch(/\bfetch\s*\(/);
       expect(code).not.toMatch(/XMLHttpRequest|WebSocket|sendBeacon|navigator\.serial/);
       expect(code).not.toMatch(/browser\.storage|chrome\.storage/);
-      expect(code).not.toMatch(/\.innerText|\.textContent\s*[^=]|\.innerHTML/); // never reads page text
+      expect(code).not.toMatch(/\.innerText|\.innerHTML|\.outerHTML/);
     });
   }
+});
+
+describe('text access in content scripts', () => {
+  it('only src/detectors/labels.ts reads on-screen text', async () => {
+    const { readdirSync } = await import('node:fs');
+    const offenders: string[] = [];
+    for (const dir of ['src/content', 'src/detectors']) {
+      for (const f of readdirSync(path.join(root, dir))) {
+        const rel = `${dir}/${f}`;
+        if (rel === 'src/detectors/labels.ts') continue;
+        const src = readFileSync(path.join(root, rel), 'utf8');
+        if (/\.textContent|\.innerText|\.value\b/.test(src)) offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('labels.ts only exports categories and booleans, never text', () => {
+    const src = readFileSync(path.join(root, 'src/detectors/labels.ts'), 'utf8');
+    const exportedFns = [...src.matchAll(/export function (\w+)\([^)]*\): ([^{]+)\{/g)].map((m) => `${m[1]}: ${m[2]!.trim()}`);
+    expect(exportedFns).toEqual([
+      'classifyLabelText: BlockCategory | null',
+      'classifyStatusLabel: BlockCategory | null',
+      'hasDraft: boolean',
+    ]);
+  });
 });
 
 describe('Chrome build', () => {

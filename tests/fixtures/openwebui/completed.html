@@ -1,9 +1,9 @@
 <!-- Synthetic fixture reproducing the structure of Open WebUI (src/lib/components/chat, commit 0666e59). -->
 <div id="app"><nav id="sidebar"><a href="/c/old">Earlier chat</a></nav><main>
   <div id="messages-container">
-    <div class="chat-user"><p>Hello</p></div>
+    <div class="flex w-full user-message group"><p>Hello</p></div>
     <div class="chat-assistant"><div class="w-full flex flex-col relative" id="response-content-container"><div id="c-1-content"><p>Hi.</p></div></div></div>
-    <div class="chat-user"><p>Question</p></div><div class="chat-assistant"><div class="w-full flex flex-col relative" id="response-content-container"><div id="c-2-content"><p>Full answer.</p></div></div></div>
+    <div class="flex w-full user-message group"><p>Question</p></div><div class="chat-assistant"><div class="w-full flex flex-col relative" id="response-content-container"><div id="c-2-content"><p>Full answer.</p></div></div></div>
   </div>
   <form><div id="message-input-container" data-composer-id="chat-input">
     <div id="chat-input" contenteditable="true"><p></p></div>

@@ -15,6 +15,7 @@
  * content is visibly being streamed into the page". Nothing more is claimed.
  */
 import type { AIState, DetectionSnapshot, Platform, SignalName } from '../shared/types';
+import { classifyStatusLabel, hasDraft, type BlockCategory } from './labels';
 import { describeNode, describePath, TraceRecorder, type TraceReport } from './trace';
 
 export interface AIDetector {
@@ -57,6 +58,17 @@ export interface PlatformProfile {
   error: string[];
   /** Containers of assistant responses (for streaming activity). */
   response: string[];
+  /** Messages the user sent; a count increase confirms a submit. */
+  userMessage?: string[];
+  /** Send controls (a click with a non-empty prompt = submit). */
+  sendButtons?: string[];
+  /**
+   * Answer blocks. The last element matching `items` is the active block:
+   * if it is/contains `text` it is answer prose; otherwise its `header`
+   * (a short status label such as "Thinking…" or "Searching the web") is
+   * classified into thinking/tool.
+   */
+  blocks?: { items: string; text: string; header: string };
 }
 
 export interface DetectorTiming {
@@ -74,16 +86,22 @@ export interface DetectorTiming {
   activityWindowMs: number;
   /** After this long without recognizable UI, report `unknown`. */
   unrecognizedAfterMs: number;
+  /** A submit counts as a pending request for this long without confirmation… */
+  pendingUnconfirmedMs: number;
+  /** …and for this long once the user's message appeared but no answer yet. */
+  pendingConfirmedMs: number;
 }
 
 export const DEFAULT_DETECTOR_TIMING: DetectorTiming = {
-  debounceMs: 300,
+  debounceMs: 150,
   typingIdleMs: 4000,
   completedHoldMs: 3000,
   errorHoldMs: 8000,
   endGraceMs: 700,
   activityWindowMs: 2500,
   unrecognizedAfterMs: 5000,
+  pendingUnconfirmedMs: 4000,
+  pendingConfirmedMs: 60_000,
 };
 
 const TICK_MS = 250;
@@ -115,6 +133,12 @@ interface Tracker {
   completedAt: number | null;
   errorAt: number | null;
   path: string;
+  /** Last submit (Enter/send click with a non-empty prompt). */
+  submitAt: number;
+  /** User-message count at submit time. */
+  userMsgBaseline: number;
+  /** Category of the active answer block (for tracing changes). */
+  lastBlock: string;
 }
 
 /** Visible enough to count: connected, not hidden by attribute or inline/computed style. */
@@ -144,6 +168,11 @@ function safeClosest(el: Element, selector: string): Element | null {
   } catch {
     return null;
   }
+}
+
+function countAll(root: ParentNode, selectors: string[]): number {
+  if (selectors.length === 0) return 0;
+  return safeQueryAll(root, selectors.join(', ')).length;
 }
 
 function anyShown(root: ParentNode, selectors: string[]): boolean {
@@ -216,6 +245,7 @@ export class DomDetector implements AIDetector {
   private t: Tracker;
 
   private readonly onInput = (ev: Event) => this.handleInput(ev);
+  private readonly onKeyDown = (ev: Event) => this.handleKeyDown(ev as KeyboardEvent);
   private readonly onClick = (ev: Event) => this.handleClick(ev);
 
   constructor(
@@ -243,6 +273,9 @@ export class DomDetector implements AIDetector {
       completedAt: null,
       errorAt: null,
       path: this.getPath(),
+      submitAt: Number.NEGATIVE_INFINITY,
+      userMsgBaseline: 0,
+      lastBlock: '',
     };
   }
 
@@ -266,6 +299,7 @@ export class DomDetector implements AIDetector {
     });
     // Capture phase so page handlers that stop propagation do not hide events.
     this.doc.addEventListener('input', this.onInput, true);
+    this.doc.addEventListener('keydown', this.onKeyDown, true);
     this.doc.addEventListener('click', this.onClick, true);
     this.evaluate();
   }
@@ -275,6 +309,7 @@ export class DomDetector implements AIDetector {
     this.observer?.disconnect();
     this.observer = null;
     this.doc.removeEventListener('input', this.onInput, true);
+    this.doc.removeEventListener('keydown', this.onKeyDown, true);
     this.doc.removeEventListener('click', this.onClick, true);
     if (this.evalTimer !== null) clearTimeout(this.evalTimer);
     this.evalTimer = null;
@@ -304,11 +339,51 @@ export class DomDetector implements AIDetector {
     this.scheduleEvaluate(MUTATION_COALESCE_MS);
   }
 
+  /** Enter (without Shift, not while composing) in a non-empty prompt box = submit. */
+  private handleKeyDown(ev: KeyboardEvent): void {
+    if (ev.key !== 'Enter' || ev.shiftKey || ev.isComposing || ev.altKey) return;
+    const target = ev.target;
+    if (!(target instanceof Element)) return;
+    const composer = closestAny(target, this.profile.composer);
+    if (composer && hasDraft(composer)) this.markSubmit();
+  }
+
+  private markSubmit(): void {
+    this.t.submitAt = this.now();
+    this.t.userMsgBaseline = countAll(this.doc, this.profile.userMessage ?? []);
+    this.trace.mark(this.t.submitAt, 'submit');
+    this.scheduleEvaluate(0);
+  }
+
+  /** True while a submitted request has not produced an answer yet. */
+  private pendingSubmit(now: number): boolean {
+    const t = this.t;
+    if (t.submitAt === Number.NEGATIVE_INFINITY || t.generating) return false;
+    const confirmed = (this.profile.userMessage?.length ?? 0) > 0 && countAll(this.doc, this.profile.userMessage!) > t.userMsgBaseline;
+    return now - t.submitAt < (confirmed ? this.timing.pendingConfirmedMs : this.timing.pendingUnconfirmedMs);
+  }
+
+  /** Category of the active (last) answer block, or null if the profile has no block model. */
+  private activeBlock(): { category: BlockCategory | 'text' | 'none'; header: Element | null } | null {
+    const b = this.profile.blocks;
+    if (!b) return null;
+    const items = safeQueryAll(this.doc, b.items);
+    const last = items[items.length - 1];
+    if (!last) return { category: 'none', header: null };
+    if (safeMatches(last, b.text) || safeQueryAll(last, b.text).length > 0) return { category: 'text', header: null };
+    const header = safeQueryAll(last, b.header)[0] ?? null;
+    return { category: classifyStatusLabel(header ?? last) ?? 'other', header };
+  }
+
   private handleClick(ev: Event): void {
     const target = ev.target;
     if (!(target instanceof Element)) return;
     const button = target.closest('button, [role="button"]');
     if (!button) return;
+    if (!this.t.generating && (this.profile.sendButtons ?? []).some((s) => safeMatches(button, s))) {
+      const composer = safeQueryAll(this.doc, this.profile.composer.join(', ')).find((c) => hasDraft(c));
+      if (composer) this.markSubmit();
+    }
     if (this.isStopControl(button)) {
       this.t.abortAt = this.now();
       this.scheduleEvaluate(MUTATION_COALESCE_MS);
@@ -465,6 +540,14 @@ export class DomDetector implements AIDetector {
     }
   }
 
+  private traceBlock(block: { category: string; header: Element | null }, now: number): void {
+    if (!this.trace.enabled) return;
+    const key = `${block.category}|${block.header ? describeNode(block.header) : ''}`;
+    if (key === this.t.lastBlock) return;
+    this.t.lastBlock = key;
+    this.trace.mark(now, `block:${block.category}${block.header ? ` header=${describeNode(block.header).slice(0, 40)}` : ''}`);
+  }
+
   private traceSignals(raw: RawSignals, now: number): void {
     const on = (['composer', 'stop', 'generatingMarker', 'streamingMarker', 'thinkingMarker', 'toolMarker'] as const).filter((k) => raw[k]);
     const key = `${on.join(',')}|err${raw.errorCount}`;
@@ -490,6 +573,8 @@ export class DomDetector implements AIDetector {
       t.abortAt = Number.NEGATIVE_INFINITY;
       t.lastInputAt = Number.NEGATIVE_INFINITY;
       t.errorBaseline = raw.errorCount;
+      // A new chat gets its own URL right after the first message: keep a fresh submit.
+      if (now - t.submitAt > 5000) t.submitAt = Number.NEGATIVE_INFINITY;
     }
 
     const rawGenerating = raw.stop || raw.generatingMarker || raw.streamingMarker;
@@ -519,6 +604,7 @@ export class DomDetector implements AIDetector {
       if (!t.generating) {
         t.generating = true;
         t.genStartedAt = now;
+        t.submitAt = Number.NEGATIVE_INFINITY; // the pending request has started
         this.trace.mark(now, 'generation-start');
         t.completedAt = null;
         t.errorBaseline = Math.min(t.errorBaseline, raw.errorCount);
@@ -545,19 +631,33 @@ export class DomDetector implements AIDetector {
     if (t.generating) {
       const activity = t.lastResponseActivityAt >= t.genStartedAt && now - t.lastResponseActivityAt < this.timing.activityWindowMs;
       if (activity) signals.push('response-activity');
-      if (raw.toolMarker) {
-        signals.push('tool-marker');
-        return { state: 'tool_use', confidence: 0.75, signals };
+      const block = this.activeBlock();
+      if (block) this.traceBlock(block, now);
+      if (raw.toolMarker || block?.category === 'tool') {
+        signals.push(raw.toolMarker ? 'tool-marker' : 'block-tool');
+        return { state: 'tool_use', confidence: raw.toolMarker ? 0.75 : 0.85, signals };
       }
-      if (raw.thinkingMarker) {
-        signals.push('thinking-marker');
-        return { state: 'thinking', confidence: 0.75, signals };
+      if (raw.thinkingMarker || block?.category === 'thinking') {
+        signals.push(raw.thinkingMarker ? 'thinking-marker' : 'block-thinking');
+        return { state: 'thinking', confidence: raw.thinkingMarker ? 0.75 : 0.85, signals };
       }
+      if (block?.category === 'other') {
+        // A non-text block with an unrecognised header (status, card, tool): not answer prose.
+        signals.push('block-thinking');
+        return { state: 'thinking', confidence: 0.6, signals };
+      }
+      if (block?.category === 'text') signals.push('block-text');
       if (raw.streamingMarker && activity) return { state: 'responding', confidence: 0.9, signals };
       if (activity) return { state: 'responding', confidence: 0.75, signals };
       // A request is in flight but no output is visible (yet / right now).
       // A streaming marker alone may be set before the first token arrives.
       return { state: 'thinking', confidence: raw.streamingMarker ? 0.55 : 0.6, signals };
+    }
+
+    // Submitted, but the answer has not started yet: the model is thinking.
+    if (this.pendingSubmit(now)) {
+      signals.push('submitted');
+      return { state: 'thinking', confidence: 0.7, signals };
     }
 
     if (t.completedAt !== null && now - t.completedAt < this.timing.completedHoldMs) {

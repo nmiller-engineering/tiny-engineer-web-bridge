@@ -30,6 +30,9 @@ export const openwebuiProfile: PlatformProfile = {
   tool: ['.status-description .shimmer'],
   error: ['[data-sonner-toast][data-type="error"]'],
   response: ['#response-content-container'],
+  // UserMessage.svelte: class="flex w-full user-message group …"
+  userMessage: ['.user-message'],
+  sendButtons: ['#send-message-button'],
 };
 
 export function createOpenWebUIDetector(opts?: DomDetectorOptions): DomDetector {

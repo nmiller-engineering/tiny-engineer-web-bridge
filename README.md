@@ -18,7 +18,7 @@ The robot is driven **directly from the extension** over your local **Wi-Fi (HTT
 
 ## Features
 
-- Detects the normalized states `idle`, `user_typing`, `thinking`, `responding`, `tool_use`, `completed`, `error`, `unknown` from **page structure only** (stop buttons, streaming markers, DOM activity in the answer area, composer input events). Conversation text is never read, stored or sent.
+- Detects the normalized states `idle`, `user_typing`, `thinking`, `responding`, `tool_use`, `completed`, `error`, `unknown` mainly from **page structure** (submit events, streaming markers, answer blocks, DOM activity in the answer area). The only on-screen text that is looked at: short status headers of non-text answer blocks (“Thinking…”, “Searching the web”, max. 80 characters) to tell thinking from tool use, and whether the prompt box is empty. Both are evaluated in memory and reduced to a category/boolean; no text is stored or sent.
 - Configurable state → animation mapping (every native firmware animation, or “Do nothing”), with a **Test** button per state.
 - Short completion animation (`ring`), then back to idle — without cutting the one-shot animation short.
 - Central state machine: debouncing, minimum stable time, duplicate suppression, last-state-wins command queue (max. one command per second, matching the firmware's 1 s hold), exponential back-off while the robot is unreachable, keepalive for long responses (prevents the firmware's `continuous_timeout` → `attention` mid-answer).

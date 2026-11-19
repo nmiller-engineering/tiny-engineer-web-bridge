@@ -22,6 +22,8 @@ export const chatgptProfile: PlatformProfile = {
   tool: [],
   error: ['[data-testid="error-message"]', '.text-token-text-error'],
   response: ['[data-message-author-role="assistant"]'],
+  userMessage: ['[data-message-author-role="user"]'],
+  sendButtons: ['button[data-testid="send-button"]', 'button[aria-label^="send" i]'],
 };
 
 export function createChatGPTDetector(opts?: DomDetectorOptions): DomDetector {

@@ -13,6 +13,7 @@ First public release.
 - Configurable animation for each state with one-click test, plus “Do nothing”.
 - Central state machine with debouncing, duplicate suppression, last-state-wins queue, reconnect back-off, keepalive for long answers and a lost-signal fallback.
 - Multi-tab handling: *Active tab* or *Busy tab first*.
+- **Fast, layered detection:** pressing Enter/send starts `thinking` immediately (before the answer exists); the active answer block distinguishes text, thinking and tool blocks (short status headers, English + German); faster defaults (debounce 150 ms, stability 250 ms, command spacing 250 ms).
 - Optional **detection report** (debug mode): a structural, text-free trace of what changed during a request, to fix detection after website changes.
 - Popup with live activity and robot status; settings page with onboarding, connection test, platform permissions, timing and diagnostics. Light and dark theme.
 - Reproducible `.xpi` and source archives; CI and tag-based release workflow with optional Mozilla (unlisted) signing.

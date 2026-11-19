@@ -102,6 +102,10 @@ export const SIGNAL_NAMES = [
   'user-input',
   'user-abort',
   'layout-unrecognized',
+  'submitted',
+  'block-text',
+  'block-thinking',
+  'block-tool',
 ] as const;
 export type SignalName = (typeof SIGNAL_NAMES)[number];
 

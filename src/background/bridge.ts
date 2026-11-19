@@ -135,7 +135,9 @@ export class Bridge {
       now: deps.now,
       setTimer: deps.setTimer,
       clearTimer: deps.clearTimer,
-      minIntervalMs: () => 1000, // matches the firmware's 1 s minimum hold
+      // The firmware holds each animation ≥ 1 s and keeps only the latest
+      // request, so spacing commands further only adds latency.
+      minIntervalMs: () => 250,
       shouldRetry: (a) => this.config.device.autoReconnect && (ANIMATION_KIND[a] === 'idle' || ANIMATION_KIND[a] === 'continuous'),
     });
 

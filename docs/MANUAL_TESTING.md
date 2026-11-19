@@ -25,7 +25,9 @@ Preparation: `npm run build`, load `dist/manifest.json` via `about:debugging`, e
 ## Per platform (ChatGPT, Claude, Open WebUI)
 - [ ] Idle chat → Diagnostics shows tab with `composer`, state Idle.
 - [ ] Typing in the prompt → User typing (robot unchanged with default mapping).
-- [ ] Send a prompt → Thinking → robot `thinking`.
+- [ ] Press Enter → robot `thinking` within about half a second, even before the answer appears (Diagnostics signal `submitted`).
+- [ ] Shift+Enter (new line) and Enter in an empty box do **not** start thinking.
+- [ ] Extended thinking / tool use (web search, running a command): Diagnostics shows `block-thinking` / `block-tool`; robot `thinking` / `reading`.
 - [ ] Answer streams → Responding → robot `typing`.
 - [ ] Answer finishes → Completed → robot `ring`, then idle, no further command.
 - [ ] Click Stop during an answer → idle, **no** `ring`.

@@ -21,19 +21,36 @@ Extended reasoning that streams text into the page usually appears as `respondin
 | Date | Platform | Result |
 | --- | --- | --- |
 | 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking not shown. Tool/command use shown as thinking (no Claude tool rule yet). |
+| 2026-11-19 | Claude | Root cause of unreliable initial thinking: before the answer element exists, no signal was visible (stop button not matched). New layer: submit detection (Enter/send) → thinking immediately; block model for thinking/tool blocks. Real-Chromium test: Enter → robot `thinking` in ~330 ms. Awaiting live verification on claude.ai. |
 | 2026-11-19 | Claude | A rule ignoring changes inside `aria-busy`/status elements broke responding (Claude marks the streaming message busy) → **reverted**. Detection report verified `div[data-testid=assistant-message][data-is-streaming]`, answer text in `div.prose > div[data-alluvium]` as `span[data-wf]` chunks; the stop button was **not** matched. In the reported request, text started ~50 ms after the request (no visible thinking phase). Next: report from a request with a visible “Thinking…” phase and a tool call. |
 
 ## Detection report
 
 With **Debug log** on, the extension records a structural trace of each request: which elements changed (tag, id, classes, a few allowlisted attributes such as `data-testid`, `data-state`, `aria-expanded`), whether the detector counted the change as answer output, and a timeline of signals and states. It never contains text, labels (except “stop…” control labels) or URLs, is validated by the background, kept in memory only, and copied with **Diagnostics → Copy detection report**. Attach it to issues about missed states.
 
+## Detection design (layers, fastest first)
+
+1. **Submit** — Enter (without Shift, not during IME composition) in a non-empty prompt box, or a click on the send control with a draft, starts a *pending request* → `thinking` immediately. It is confirmed when a new user message appears (`userMessage` selectors) and then lasts until the answer starts (max. 60 s); unconfirmed it expires after 4 s. This covers the phase before the platform creates any answer element (on Claude: before `data-is-streaming` appears), which is when users see “thinking”.
+2. **Lifecycle** — stop control / streaming / busy markers start and end a generation (end needs 700 ms without signals).
+3. **Active answer block** (profiles with a block model; Claude) — the last block of the streaming answer decides:
+   text block (`.prose`) → `responding` while it grows, `thinking` during pauses; non-text block → its short status header is classified: thinking vocabulary → `thinking`, tool vocabulary → `tool_use`, unknown → `thinking` (never “responding”).
+4. **Answer activity** — fallback for platforms without a block model: DOM growth in the answer area → `responding`, otherwise `thinking`.
+
+Pipeline latency with defaults (debounce 150 ms, stable 250 ms, command spacing 250 ms): Enter → robot command ≈ 0.3–0.5 s. Measured in real Chromium by `npm run test:e2e`: ~330 ms (with 150 ms stability).
+
 ## Signals (reported to Diagnostics)
 
-`composer`, `stop-button`, `generating-marker`, `streaming-marker`, `response-activity`, `thinking-marker`, `tool-marker`, `error-marker`, `user-input`, `user-abort`, `layout-unrecognized`.
+`composer`, `stop-button`, `generating-marker`, `streaming-marker`, `response-activity`, `thinking-marker`, `tool-marker`, `error-marker`, `user-input`, `user-abort`, `layout-unrecognized`, `submitted`, `block-text`, `block-thinking`, `block-tool`.
 
 Confidence values: idle with composer 0.9, responding with marker + activity 0.9, activity only 0.75, tool 0.75, thinking 0.55–0.6, error 0.75, completed 0.8, unknown 0.2.
 
 ## Platform selectors
+
+### Status label vocabulary (`src/detectors/labels.ts`)
+
+Thinking: thinking, thought, reasoning, pondering, considering, … / denkt, nachdenken, überlegt, …
+Tool: search(ed/ing), fetch, read, view, open, run/ran, execut…, calling, used/using, creat…, edit, writ…, analy…, install, download, query … / such…, ruft, führt aus, erstell…, bearbeit…, schreib…, les…, analys…, verwend…, nutz…
+Labels longer than 80 characters are ignored. Extend the lists when a platform prints new status words.
 
 ### ChatGPT — `src/detectors/chatgpt.ts` — **unverified assumptions**
 
@@ -53,7 +70,9 @@ Confidence values: idle with composer 0.9, responding with marker + activity 0.9
 | composer | `[data-testid="chat-input"]`, `div.ProseMirror[contenteditable="true"]`, `fieldset [contenteditable="true"]` |
 | stop | `button[data-testid="stop-button"]`; English fallback aria-label `Stop response` / `Stop generating` |
 | streaming | `[data-is-streaming="true"]` |
-| answer area | `[data-is-streaming]`, `.font-claude-response`, `.font-claude-message` |
+| answer area | `[data-testid="assistant-message"]` (**verified**), `[data-is-streaming]` (**verified**), `.font-claude-response`, `.font-claude-message` |
+| answer blocks | `[data-testid=assistant-message][data-is-streaming=true] [data-item-key]`, text = `.prose` (**verified**); status header = `button, [aria-expanded], summary, [role=status]` (assumed) |
+| user messages / send | `[data-testid="user-message"]`, `button[aria-label^="send" i]` (assumed) |
 | error | `[data-testid="message-error"]` |
 | tool | none known |
 

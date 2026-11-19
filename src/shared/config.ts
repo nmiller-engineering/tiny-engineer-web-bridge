@@ -87,8 +87,8 @@ export const DEFAULT_MAPPING: AnimationMapping = {
 };
 
 export const DEFAULT_TIMING: TimingConfig = {
-  debounceMs: 300,
-  minStableMs: 500,
+  debounceMs: 150,
+  minStableMs: 250,
   completionMs: 2000,
   requestTimeoutMs: 2000,
   staleMs: 30_000,

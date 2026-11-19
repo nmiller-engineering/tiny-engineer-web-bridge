@@ -2,13 +2,14 @@
 
 _Last updated: 2026-11-18_
 
-**Short version: the extension collects nothing, sends nothing to us, and never reads your conversations.**
+**Short version: the extension collects nothing, sends nothing to us, and never reads your prompts or the answers.**
 
 ## What the extension does
 It watches the *structure* of ChatGPT, Claude and Open WebUI pages (for example whether a “stop” button is visible or whether the answer area is changing) and tells your Tiny Engineer robot which animation to play.
 
 ## Data it does not collect
 - No conversation content: prompts and answers are never read, stored or transmitted.
+- To tell “thinking” from “using a tool”, the extension looks at the **short status headers** an AI page shows above non-text blocks (for example “Thinking…” or “Searching the web”, at most 80 characters), and it checks whether the prompt box is **empty or not** when you press Enter. Both are evaluated instantly in your browser and turned into a category (thinking / tool) or a yes/no — the text itself is never kept, logged or sent anywhere.
 - No passwords, cookies, session tokens or account data of AI services.
 - No analytics, telemetry, crash reports, advertising identifiers or remote logging.
 - No browsing history; the extension only runs on the AI sites you enable.

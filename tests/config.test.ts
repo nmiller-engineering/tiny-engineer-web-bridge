@@ -135,7 +135,7 @@ describe('sanitizeConfig', () => {
   });
 
   it('uses the documented default timing and mapping', () => {
-    expect(DEFAULT_CONFIG.timing).toMatchObject({ debounceMs: 300, minStableMs: 500, completionMs: 2000, requestTimeoutMs: 2000 });
+    expect(DEFAULT_CONFIG.timing).toMatchObject({ debounceMs: 150, minStableMs: 250, completionMs: 2000, requestTimeoutMs: 2000 });
     expect(DEFAULT_MAPPING).toEqual({
       idle: 'none',
       user_typing: 'disabled',

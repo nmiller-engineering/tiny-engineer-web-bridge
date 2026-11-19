@@ -48,7 +48,7 @@ function fixtureServer() {
     try {
       const html = await readFile(path.join(fixtures, `${name.replace(/[^\w-]/g, '')}.html`), 'utf8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(req.url?.startsWith('/fixture/') ? html : `<!doctype html><html><head><title>Open WebUI</title></head><body>${html}</body></html>`);
+      res.end(req.url?.startsWith('/fixture/') ? html : `<!doctype html><html><head><title>Open WebUI</title><style>#chat-input{min-height:2em;min-width:20em;border:1px solid #888}</style></head><body>${html}</body></html>`);
     } catch {
       res.writeHead(404).end();
     }
@@ -128,9 +128,18 @@ async function main() {
         document.body.innerHTML = html;
       }, name);
 
+    // Real keystrokes: typing, then Enter → thinking before any answer element exists.
+    await chat.click('#chat-input');
+    await chat.keyboard.type('Hello robot');
+    const sentAt = Date.now();
+    await chat.keyboard.press('Enter');
+    await waitFor(() => posts().includes('thinking'), 3000, 25);
+    const latency = Date.now() - sentAt;
+    check('Enter → robot "thinking" within 1 s (before any answer exists)', posts().includes('thinking') && latency < 1000, `${latency} ms`);
+
     await morph('thinking');
-    await waitFor(() => posts().includes('thinking'), 6000);
-    check('thinking → robot "thinking"', posts().includes('thinking'), posts().join(' → '));
+    await sleep(500);
+    check('answer starts → still "thinking", no duplicate command', posts().filter((n) => n === 'thinking').length === 1, posts().join(' → '));
 
     await morph('streaming');
     for (let i = 0; i < 20; i++) {

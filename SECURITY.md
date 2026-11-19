@@ -11,7 +11,7 @@
 
 ## Trust boundaries
 
-1. **Content scripts are untrusted.** They run inside AI pages and are compiled from `src/content` + `src/detectors` only. Lint rules and `tests/architecture.test.ts` ensure these bundles contain no config, storage, device client, `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `navigator.serial`, and never read page text (`textContent`/`innerText`/`innerHTML`).
+1. **Content scripts are untrusted.** They run inside AI pages and are compiled from `src/content` + `src/detectors` only. Lint rules and `tests/architecture.test.ts` ensure these bundles contain no config, storage, device client, `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `navigator.serial`. Page text is read in exactly one module, `src/detectors/labels.ts` (enforced per source file by a test): short status headers (≤ 80 characters) are classified into `thinking`/`tool`/`other`, and the prompt box is checked for emptiness (boolean). Its exported functions return only categories/booleans (also enforced by a test); no text leaves the module.
 2. **Messages are validated** (`parseContentMessage`): exact key set, protocol version, enumerated platform/state/signal names, bounded confidence and sequence numbers. A content script cannot name a URL, method, header, body or animation — the background maps states to animations itself.
 3. **Sender checks:** only top-frame tab senders of this extension; the sender's origin must equal the platform's expected origin (`https://chatgpt.com`, `https://claude.ai`, or the exact configured Open WebUI origin including port). Privileged requests (`getStatus`, `testConnection`, `testAnimation`, debug log) are only accepted from this extension's own pages.
 4. **The device clients** can reach only the configured robot and only the documented endpoints/ops. Animation names come from a fixed allowlist.
@@ -49,7 +49,7 @@ No `tabs`, `<all_urls>`, `webRequest`, `cookies`, `history` or `clipboard` permi
 ## Data handling
 
 - No telemetry, analytics, remote logging, or remote code. All scripts are bundled; the manifest declares `data_collection_permissions: none`.
-- Conversation content, passwords, cookies, AI session tokens and auth headers are never read or collected.
+- Prompts, answers, passwords, cookies, AI session tokens and auth headers are never read or collected. (Exception, in memory only: short status headers and the prompt box's empty/non-empty state — see trust boundary 1.)
 - Settings are stored in `browser.storage.local` of the Firefox profile — **not encrypted** — and never in `storage.sync`.
 - Residual risk: Firefox makes `storage.local` available to *all* of an extension's contexts, including its own content scripts. Our content-script code never touches storage (enforced by lint + bundle tests), and page JavaScript cannot reach the content script's `browser` object (Xray isolation). A bug that allowed code execution *inside* our content script could, however, read the token. Keep the robot token unique (do not reuse a password).
 - The debug log is off by default, in memory only, capped, and contains only states, platform names, tab ids, animation names and error categories. Tab titles/URLs are not stored.

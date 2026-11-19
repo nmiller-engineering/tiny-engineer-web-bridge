@@ -10,6 +10,7 @@ function setup(mutate: (c: Config) => void = () => undefined) {
   const clock = new FakeClock();
   const config = cloneDefaultConfig();
   config.device.host = '127.0.0.1';
+  config.timing.minStableMs = 500; // tests below exercise the stability window explicitly
   mutate(config);
   const sent: Animation[] = [];
   const registry = new TabRegistry();
