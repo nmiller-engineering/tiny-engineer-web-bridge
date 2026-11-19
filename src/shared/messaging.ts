@@ -43,7 +43,21 @@ export interface StateMessage {
   seq: number;
 }
 
-export type ContentMessage = HelloMessage | StateMessage;
+/** Debug-only structural trace of one request (see detectors/trace.ts). */
+export interface ReportMessage {
+  v: typeof PROTOCOL_VERSION;
+  kind: 'report';
+  platform: Platform;
+  report: DetectionReport;
+}
+
+export interface DetectionReport {
+  durationMs: number;
+  timeline: { t: number; e: string }[];
+  mutations: { d: string; type: 'child' | 'text' | 'attr'; act: boolean; add: string; n: number; first: number; last: number }[];
+}
+
+export type ContentMessage = HelloMessage | StateMessage | ReportMessage;
 
 /** Reply to every content message. Carries only non-secret tuning values. */
 export interface ContentReply {
@@ -52,10 +66,41 @@ export interface ContentReply {
   typingIdleMs: number;
   completionMs: number;
   heartbeatMs: number;
+  /** Record a structural detection report (only while debug logging is on). */
+  trace: boolean;
 }
 
 const STATE_KEYS = new Set(['v', 'kind', 'platform', 'state', 'confidence', 'signals', 'seq']);
 const HELLO_KEYS = new Set(['v', 'kind', 'platform']);
+const REPORT_KEYS = new Set(['v', 'kind', 'platform', 'report']);
+/** Same character set the trace recorder emits: structure only, no free text. */
+const REPORT_STRING = /^[\w\-:./[\]%#()="^ >,]*$/;
+
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e9;
+const reportString = (v: unknown, max: number): v is string => typeof v === 'string' && v.length <= max && REPORT_STRING.test(v);
+
+function parseReport(raw: unknown): DetectionReport | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const r = raw as Record<string, unknown>;
+  if (!finite(r.durationMs) || !Array.isArray(r.timeline) || !Array.isArray(r.mutations)) return null;
+  if (r.timeline.length > 120 || r.mutations.length > 100) return null;
+  const timeline: DetectionReport['timeline'] = [];
+  for (const x of r.timeline) {
+    const e = x as Record<string, unknown>;
+    if (typeof e !== 'object' || e === null || !finite(e.t) || !reportString(e.e, 60)) return null;
+    timeline.push({ t: e.t, e: e.e });
+  }
+  const mutations: DetectionReport['mutations'] = [];
+  for (const x of r.mutations) {
+    const m = x as Record<string, unknown>;
+    if (typeof m !== 'object' || m === null) return null;
+    if (!reportString(m.d, 400) || !reportString(m.add, 160) || typeof m.act !== 'boolean') return null;
+    if (m.type !== 'child' && m.type !== 'text' && m.type !== 'attr') return null;
+    if (!finite(m.n) || !finite(m.first) || !finite(m.last)) return null;
+    mutations.push({ d: m.d, type: m.type, act: m.act, add: m.add, n: m.n, first: m.first, last: m.last });
+  }
+  return { durationMs: r.durationMs, timeline, mutations };
+}
 
 function hasOnlyKeys(o: Record<string, unknown>, allowed: Set<string>): boolean {
   return Object.keys(o).every((k) => allowed.has(k));
@@ -70,6 +115,12 @@ export function parseContentMessage(raw: unknown): ContentMessage | null {
   if (m.kind === 'hello') {
     if (!hasOnlyKeys(m, HELLO_KEYS)) return null;
     return { v: PROTOCOL_VERSION, kind: 'hello', platform: m.platform };
+  }
+
+  if (m.kind === 'report') {
+    if (!hasOnlyKeys(m, REPORT_KEYS)) return null;
+    const report = parseReport(m.report);
+    return report ? { v: PROTOCOL_VERSION, kind: 'report', platform: m.platform, report } : null;
   }
 
   if (m.kind === 'state') {
@@ -101,6 +152,7 @@ export type PageRequest =
   | { kind: 'testConnection' }
   | { kind: 'testAnimation'; animation: Animation }
   | { kind: 'getDebugLog' }
+  | { kind: 'getDetectionReports' }
   | { kind: 'clearDebugLog' };
 
 export function parsePageRequest(raw: unknown): PageRequest | null {
@@ -110,6 +162,7 @@ export function parsePageRequest(raw: unknown): PageRequest | null {
     case 'getStatus':
     case 'testConnection':
     case 'getDebugLog':
+    case 'getDetectionReports':
     case 'clearDebugLog':
       return { kind: m.kind };
     case 'testAnimation':

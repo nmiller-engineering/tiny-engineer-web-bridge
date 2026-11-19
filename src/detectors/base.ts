@@ -15,6 +15,7 @@
  * content is visibly being streamed into the page". Nothing more is claimed.
  */
 import type { AIState, DetectionSnapshot, Platform, SignalName } from '../shared/types';
+import { describeNode, describePath, TraceRecorder, type TraceReport } from './trace';
 
 export interface AIDetector {
   readonly platform: string;
@@ -86,6 +87,13 @@ export const DEFAULT_DETECTOR_TIMING: DetectorTiming = {
 };
 
 const TICK_MS = 250;
+
+/**
+ * Interactive and status elements: changes inside them (a "Thinking…" or
+ * "Searching…" header, an expander, a spinner icon) are UI chrome, not the
+ * answer being written. Purely structural — no text is inspected.
+ */
+const STATUS_CHROME = 'button, [role="button"], summary, [aria-expanded], svg, [role="status"], [role="progressbar"], [aria-busy="true"]';
 const MUTATION_COALESCE_MS = 60;
 
 /** Raw structural observations at one instant. Exported for tests. */
@@ -152,6 +160,14 @@ function countShown(root: ParentNode, selectors: string[]): number {
   return seen.size;
 }
 
+function safeMatches(el: Element, selector: string): boolean {
+  try {
+    return el.matches(selector);
+  } catch {
+    return false;
+  }
+}
+
 function closestAny(el: Element, selectors: string[]): Element | null {
   for (const s of selectors) {
     const hit = safeClosest(el, s);
@@ -178,6 +194,8 @@ export interface DomDetectorOptions {
   timing?: Partial<DetectorTiming>;
   /** Override for tests: current path used to detect SPA chat switches. */
   getPath?: () => string;
+  /** Receives a structural trace after each request while tracing is enabled. */
+  onReport?: (report: TraceReport) => void;
 }
 
 /** Generic detector driven by a PlatformProfile. */
@@ -196,6 +214,8 @@ export class DomDetector implements AIDetector {
   private active = false;
 
   private emitted: DetectionSnapshot = { state: 'idle', confidence: 0.3, signals: [] };
+  readonly trace: TraceRecorder;
+  private lastRawKey = '';
   private pending: { state: AIState; since: number } | null = null;
   private t: Tracker;
 
@@ -212,6 +232,7 @@ export class DomDetector implements AIDetector {
     this.getPath = opts.getPath ?? (() => this.doc.location?.pathname ?? '');
     this.timing = { ...DEFAULT_DETECTOR_TIMING, ...opts.timing };
     this.t = this.freshTracker();
+    this.trace = new TraceRecorder(opts.onReport);
   }
 
   private freshTracker(): Tracker {
@@ -312,7 +333,9 @@ export class DomDetector implements AIDetector {
 
   private handleMutations(records: MutationRecord[]): void {
     const now = this.now();
-    if (now - this.t.lastResponseActivityAt > 100) {
+    if (this.trace.enabled) {
+      this.traceMutations(records, now);
+    } else if (now - this.t.lastResponseActivityAt > 100) {
       for (const r of records) {
         if (this.isResponseActivity(r)) {
           this.t.lastResponseActivityAt = now;
@@ -321,6 +344,24 @@ export class DomDetector implements AIDetector {
       }
     }
     this.scheduleEvaluate(MUTATION_COALESCE_MS);
+  }
+
+  /** Debug-only: record what changes (structure only) for the detection report. */
+  private traceMutations(records: MutationRecord[], now: number): void {
+    for (const r of records.slice(0, 400)) {
+      const act = this.isResponseActivity(r);
+      if (act) this.t.lastResponseActivityAt = now;
+      const el = r.target.nodeType === 1 ? (r.target as Element) : r.target.parentElement;
+      if (!el) continue;
+      const container = closestAny(el, this.profile.response);
+      const added = Array.from(r.addedNodes).find((n) => n.nodeType === 1) as Element | undefined;
+      const addedIsControl = added !== undefined && added.matches?.(STATUS_CHROME);
+      // Only the answer area, plus controls appearing anywhere (stop buttons, expanders).
+      if (!container && !addedIsControl) continue;
+      const type = r.type === 'characterData' ? 'text' : r.type === 'attributes' ? 'attr' : 'child';
+      const addDesc = added ? describeNode(added) : r.addedNodes.length > 0 ? '#text' : '';
+      this.trace.mutation(now, describePath(el, container, 7), type, act, addDesc);
+    }
   }
 
   /**
@@ -336,12 +377,14 @@ export class DomDetector implements AIDetector {
     if (!closestAny(el, this.profile.response)) return false;
     const ignore = [...this.profile.thinking, ...this.profile.tool, ...this.profile.generating, ...this.profile.composer];
     if (closestAny(el, ignore)) return false;
+    if (safeClosest(el, STATUS_CHROME)) return false;
     if (r.type === 'characterData') return true;
     // childList: count only when something other than a status marker was added.
     for (const added of Array.from(r.addedNodes)) {
       if (added.nodeType === 3) return true;
       if (added.nodeType === 1) {
         const ae = added as Element;
+        if (safeMatches(ae, STATUS_CHROME)) continue;
         const isMarker = ignore.some((s) => {
           try {
             return ae.matches(s) || ae.querySelector(s) !== null;
@@ -408,6 +451,7 @@ export class DomDetector implements AIDetector {
       if (now - this.pending.since >= this.timing.debounceMs) {
         this.pending = null;
         this.emitted = next;
+        this.trace.mark(now, `state:${next.state}`);
         for (const cb of [...this.listeners]) cb(next.state);
       }
     }
@@ -423,6 +467,14 @@ export class DomDetector implements AIDetector {
       const wait = this.pending ? Math.min(TICK_MS, Math.max(0, this.pending.since + this.timing.debounceMs - now)) : TICK_MS;
       this.scheduleEvaluate(wait);
     }
+  }
+
+  private traceSignals(raw: RawSignals, now: number): void {
+    const on = (['composer', 'stop', 'generatingMarker', 'streamingMarker', 'thinkingMarker', 'toolMarker'] as const).filter((k) => raw[k]);
+    const key = `${on.join(',')}|err${raw.errorCount}`;
+    if (key === this.lastRawKey) return;
+    this.lastRawKey = key;
+    this.trace.mark(now, `signals:${on.join(',') || 'none'} errors:${raw.errorCount}`);
   }
 
   /** Pure-ish classification: updates the generation tracker and returns a snapshot. */
@@ -445,6 +497,7 @@ export class DomDetector implements AIDetector {
     }
 
     const rawGenerating = raw.stop || raw.generatingMarker || raw.streamingMarker;
+    if (this.trace.enabled) this.traceSignals(raw, now);
     if (raw.stop) signals.push('stop-button');
     if (raw.generatingMarker) signals.push('generating-marker');
     if (raw.streamingMarker) signals.push('streaming-marker');
@@ -454,6 +507,7 @@ export class DomDetector implements AIDetector {
     if (raw.errorCount < t.errorBaseline) t.errorBaseline = raw.errorCount;
     if (raw.errorCount > t.errorBaseline && t.errorAt === null) {
       t.errorAt = now;
+      if (t.generating) this.trace.finish(t.genStartedAt, now);
       t.generating = false;
       t.notGeneratingSince = null;
       t.completedAt = null;
@@ -469,6 +523,7 @@ export class DomDetector implements AIDetector {
       if (!t.generating) {
         t.generating = true;
         t.genStartedAt = now;
+        this.trace.mark(now, 'generation-start');
         t.completedAt = null;
         t.errorBaseline = Math.min(t.errorBaseline, raw.errorCount);
       }
@@ -479,6 +534,8 @@ export class DomDetector implements AIDetector {
         t.notGeneratingSince = null;
         const aborted = t.abortAt >= t.genStartedAt;
         if (!aborted) t.completedAt = now;
+        this.trace.mark(now, aborted ? 'generation-end:aborted' : 'generation-end');
+        this.trace.finish(t.genStartedAt, now);
       }
     }
     if (t.abortAt >= t.genStartedAt && t.abortAt > Number.NEGATIVE_INFINITY) signals.push('user-abort');

@@ -34,6 +34,24 @@ describe('parseContentMessage', () => {
   ])('rejects %s', (_label, msg) => expect(parseContentMessage(msg)).toBeNull());
 });
 
+describe('detection report messages', () => {
+  const report = { durationMs: 1200, timeline: [{ t: 0, e: 'generation-start' }], mutations: [{ d: 'div.font-claude-response > p', type: 'text', act: true, add: '', n: 3, first: 10, last: 900 }] };
+
+  it('accepts structural reports', () => {
+    expect(parseContentMessage({ v: 1, kind: 'report', platform: 'claude', report })?.kind).toBe('report');
+  });
+
+  it.each([
+    ['free text in a descriptor', { ...report, mutations: [{ ...report.mutations[0], d: 'p > Dear diary, my password is…' }] }],
+    ['quotes/newlines', { ...report, timeline: [{ t: 0, e: "x'\n" }] }],
+    ['too many groups', { ...report, mutations: Array(101).fill(report.mutations[0]) }],
+    ['bad type', { ...report, mutations: [{ ...report.mutations[0], type: 'script' }] }],
+    ['missing numbers', { ...report, durationMs: 'long' }],
+  ])('rejects %s', (_l, r) => {
+    expect(parseContentMessage({ v: 1, kind: 'report', platform: 'claude', report: r })).toBeNull();
+  });
+});
+
 describe('parsePageRequest', () => {
   it('validates animation names', () => {
     expect(parsePageRequest({ kind: 'testAnimation', animation: 'ring' })).toEqual({ kind: 'testAnimation', animation: 'ring' });

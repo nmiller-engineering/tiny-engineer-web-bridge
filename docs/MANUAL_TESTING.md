@@ -33,6 +33,9 @@ Preparation: `npm run build`, load `dist/manifest.json` via `about:debugging`, e
 - [ ] Close tab during an answer → robot returns to `none`.
 - [ ] Non-English UI language: note which states still work.
 
+## When a state is missed
+- [ ] Diagnostics → Debug log on → reload the AI tab → send one prompt → wait for the answer → **Copy detection report** and attach it to the issue.
+
 ## Multiple tabs
 - [ ] Active-tab mode: two AI tabs; only the focused one drives the robot; switching between idle tabs sends no command.
 - [ ] Activity-priority mode: an answer in a background tab drives the robot; its completion rings.

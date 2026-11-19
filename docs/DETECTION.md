@@ -14,7 +14,17 @@ Web UIs do not expose a model's internal phases. The detectors therefore report 
 | `user_typing` | `input` events on the prompt composer in the last 4 s. Only the event timestamp is used. |
 | `unknown` | Neither composer nor answer area was recognized for 5 s (layout changed / not a chat page). |
 
-Extended reasoning that streams text into the page usually appears as `responding`; a long silent wait appears as `thinking`.
+Changes inside interactive or status elements in the answer area — buttons, expanders (`[aria-expanded]`, `summary`), icons (`svg`), `role="status"`/`progressbar`, `aria-busy` — are treated as UI chrome, not as the answer being written. This keeps an animated “Thinking…” or “Searching…” header in the `thinking` state until real answer content appears. Extended-reasoning text that streams into the page as normal content still appears as `responding`.
+
+## Live findings
+
+| Date | Platform | Result |
+| --- | --- | --- |
+| 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking was reported as responding (status header counted as answer) → status-chrome rule added, awaiting re-test. Tool use not detected (no Claude tool rule yet). |
+
+## Detection report
+
+With **Debug log** on, the extension records a structural trace of each request: which elements changed (tag, id, classes, a few allowlisted attributes such as `data-testid`, `data-state`, `aria-expanded`), whether the detector counted the change as answer output, and a timeline of signals and states. It never contains text, labels (except “stop…” control labels) or URLs, is validated by the background, kept in memory only, and copied with **Diagnostics → Copy detection report**. Attach it to issues about missed states.
 
 ## Signals (reported to Diagnostics)
 

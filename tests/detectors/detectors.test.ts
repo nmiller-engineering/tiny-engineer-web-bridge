@@ -4,6 +4,7 @@ import { DomDetector, type PlatformProfile } from '../../src/detectors/base';
 import { chatgptProfile } from '../../src/detectors/chatgpt';
 import { claudeProfile } from '../../src/detectors/claude';
 import { openwebuiProfile } from '../../src/detectors/openwebui';
+import { parseContentMessage } from '../../src/shared/messaging';
 import type { AIState } from '../../src/shared/types';
 import { appendToken, click, loadFixture, typeInto } from '../helpers/dom';
 
@@ -269,5 +270,63 @@ describe('privacy of label inspection', () => {
       Element.prototype.getAttribute = orig;
     }
     expect(reads.some((r) => r.includes('secret'))).toBe(false);
+  });
+});
+
+describe('initial thinking with a status header in the answer area (Claude)', () => {
+  it('stays "thinking" while only the status header/spinner changes, then "responding"', async () => {
+    loadFixture('claude', 'idle');
+    start(claudeProfile);
+    await tick(500);
+    loadFixture('claude', 'thinking-status');
+    const status = document.querySelector('.status-text')!;
+    const spinner = document.querySelector('.spinner')!;
+    for (let i = 0; i < 12; i++) {
+      status.firstChild!.nodeValue = i % 2 ? 'Thinking.' : 'Thinking..'; // animated status text
+      spinner.append(document.createElementNS('http://www.w3.org/2000/svg', 'circle'));
+      await tick(150);
+    }
+    expect(detector.getState()).toBe('thinking');
+    expect(detector.getSnapshot().signals).not.toContain('response-activity');
+    await stream('.answer', 1500); // real answer text arrives
+    expect(detector.getState()).toBe('responding');
+    expect(emitted).toEqual(['thinking', 'responding']);
+  });
+});
+
+describe('detection report (debug only)', () => {
+  it('records structure of a request without any page text', async () => {
+    const reports: unknown[] = [];
+    loadFixture('claude', 'idle');
+    emitted = [];
+    detector = new DomDetector(claudeProfile, { getPath: () => path, onReport: (r) => reports.push(r) });
+    detector.trace.setEnabled(true);
+    detector.initialize();
+    await tick(500);
+    loadFixture('claude', 'thinking-status');
+    await tick(800);
+    await stream('.answer', 900);
+    loadFixture('claude', 'completed');
+    await tick(1500);
+    expect(reports).toHaveLength(1);
+    const json = JSON.stringify(reports[0]);
+    expect(json).not.toMatch(/Thinking|Hello|Question|Partial|token|Full answer|Write your prompt|Earlier chat/);
+    expect(json).toContain('generation-start');
+    expect(json).toContain('font-claude-response');
+    const msg = parseContentMessage({ v: 1, kind: 'report', platform: 'claude', report: reports[0] });
+    expect(msg?.kind).toBe('report');
+    const report = reports[0] as { mutations: { act: boolean; d: string }[] };
+    expect(report.mutations.some((m) => m.act && m.d.includes('div.answer'))).toBe(true);
+  });
+
+  it('records nothing while tracing is off', async () => {
+    const reports: unknown[] = [];
+    loadFixture('claude', 'thinking');
+    detector = new DomDetector(claudeProfile, { getPath: () => path, onReport: (r) => reports.push(r) });
+    detector.initialize();
+    await tick(800);
+    loadFixture('claude', 'completed');
+    await tick(1500);
+    expect(reports).toEqual([]);
   });
 });

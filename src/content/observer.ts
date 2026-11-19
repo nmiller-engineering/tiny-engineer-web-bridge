@@ -24,10 +24,11 @@ function parseReply(raw: unknown): ContentReply | null {
   const typingIdleMs = num(r.typingIdleMs);
   const completionMs = num(r.completionMs);
   const heartbeatMs = num(r.heartbeatMs);
+  const trace = r.trace === true;
   if (typeof r.active !== 'boolean' || debounceMs === null || typingIdleMs === null || completionMs === null || heartbeatMs === null) {
     return null;
   }
-  return { active: r.active, debounceMs, typingIdleMs, completionMs, heartbeatMs };
+  return { active: r.active, debounceMs, typingIdleMs, completionMs, heartbeatMs, trace };
 }
 
 export function detectorTimingFromReply(reply: ContentReply): Partial<DetectorTiming> {
@@ -60,7 +61,12 @@ export class ContentBridge {
       return;
     }
     this.heartbeatMs = Math.max(2000, reply.heartbeatMs);
-    this.detector = new DomDetector(this.profile, { document: this.win.document, timing: detectorTimingFromReply(reply) });
+    this.detector = new DomDetector(this.profile, {
+      document: this.win.document,
+      timing: detectorTimingFromReply(reply),
+      onReport: (report) => void this.post({ v: PROTOCOL_VERSION, kind: 'report', platform: this.profile.platform, report }),
+    });
+    this.detector.trace.setEnabled(reply.trace);
     this.detector.subscribe(() => this.report());
     this.detector.initialize();
     this.report();
@@ -105,6 +111,7 @@ export class ContentBridge {
       seq: ++this.seq,
     }).then((reply) => {
       if (reply && !reply.active) this.stop();
+      else if (reply) this.detector?.trace.setEnabled(reply.trace);
     });
   }
 

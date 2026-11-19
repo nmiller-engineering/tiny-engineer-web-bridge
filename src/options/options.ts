@@ -432,6 +432,32 @@ $('#refresh-log').addEventListener('click', async () => {
   pre.textContent = lines.length ? lines.join('\n') : config.debugLogging ? '(log is empty)' : '(debug logging is off)';
 });
 
+$('#copy-report').addEventListener('click', async () => {
+  const pre = $('#log');
+  pre.hidden = false;
+  if (!config.debugLogging) {
+    pre.textContent = 'Switch on “Debug log” first, then send one prompt in the AI tab and press this button again.';
+    return;
+  }
+  const reports = await sendToBackground<{ tabId: number; platform: string; at: number; report: unknown }[]>({ kind: 'getDetectionReports' });
+  if (reports.length === 0) {
+    pre.textContent = 'No report yet. Reload the AI tab, send one prompt, wait until the answer is finished, then press this button again.';
+    return;
+  }
+  const text = JSON.stringify(
+    { extension: browser.runtime.getManifest().version, generated: new Date().toISOString(), reports: reports.map(({ platform, at, report }) => ({ platform, at: new Date(at).toISOString(), report })) },
+    null,
+    1,
+  );
+  pre.textContent = text;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Detection report copied');
+  } catch {
+    toast('Select the text below and copy it');
+  }
+});
+
 $('#clear-log').addEventListener('click', async () => {
   await sendToBackground({ kind: 'clearDebugLog' });
   $('#log').textContent = '';

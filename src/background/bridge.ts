@@ -9,6 +9,7 @@ import type {
   ConnectionTestResult,
   ContentMessage,
   ContentReply,
+  DetectionReport,
   StatusSnapshot,
   TabStatus,
 } from '../shared/messaging';
@@ -91,6 +92,16 @@ export class Bridge {
   };
   private resumeTimer: unknown = null;
   private lastRefreshAt = Number.NEGATIVE_INFINITY;
+  private readonly reports = new Map<number, { tabId: number; platform: Platform; at: number; report: DetectionReport }>();
+
+  /** Latest detection report per tab (debug logging only). */
+  detectionReports(): { tabId: number; platform: Platform; at: number; report: DetectionReport }[] {
+    return [...this.reports.values()].sort((a, b) => b.at - a.at);
+  }
+
+  clearDetectionReports(): void {
+    this.reports.clear();
+  }
 
   constructor(
     config: Config,
@@ -183,6 +194,7 @@ export class Bridge {
     if (deviceChanged || JSON.stringify(prev.mapping) !== JSON.stringify(next.mapping) || prev.enabled !== next.enabled) {
       this.state.invalidate();
     }
+    if (!next.debugLogging) this.reports.clear();
     this.state.evaluate();
     this.deps.onChange?.();
   }
@@ -199,6 +211,7 @@ export class Bridge {
       typingIdleMs: t.typingIdleMs,
       completionMs: t.completionMs,
       heartbeatMs: Math.max(2000, Math.min(10_000, Math.floor(t.staleMs / 3))),
+      trace: this.config.debugLogging,
     };
   }
 
@@ -212,6 +225,14 @@ export class Bridge {
     if (!active) {
       if (this.registry.get(tabId)?.platform === msg.platform && this.registry.remove(tabId)) this.state.evaluate();
       return this.contentReply(false);
+    }
+    if (msg.kind === 'report') {
+      // Debug-only, memory-only; structure descriptors, never page text.
+      if (this.config.debugLogging) {
+        this.reports.set(tabId, { tabId, platform: msg.platform, at: now, report: msg.report });
+        this.log(`tab ${tabId}: detection report (${msg.report.mutations.length} element groups)`);
+      }
+      return this.contentReply(true);
     }
     if (msg.kind === 'hello') {
       this.registry.hello(tabId, msg.platform, now);

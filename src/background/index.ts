@@ -118,8 +118,11 @@ async function handlePageRequest(req: PageRequest, b: Bridge): Promise<unknown> 
       return b.testAnimation(req.animation);
     case 'getDebugLog':
       return debugLog.entries();
+    case 'getDetectionReports':
+      return b.detectionReports();
     case 'clearDebugLog':
       debugLog.clear();
+      b.clearDetectionReports();
       return true;
   }
 }
