@@ -43,6 +43,30 @@ async function withBusy<T>(button: HTMLButtonElement, task: () => Promise<T>): P
 
 interface WebSerialLike {
   requestPort(options?: { filters?: { usbVendorId: number }[] }): Promise<{ getInfo(): { usbVendorId?: number; usbProductId?: number } }>;
+  getPorts?(): Promise<unknown[]>;
+}
+
+/** USB diagnostics: what this page and the background can see. Shown under the USB section. */
+async function renderSerialDiagnostics(): Promise<void> {
+  const firefox = /Firefox\/([\d.]+)/.exec(navigator.userAgent)?.[1] ?? 'unknown';
+  const page = webSerial();
+  let pagePorts = '–';
+  try {
+    if (page?.getPorts) pagePorts = String((await page.getPorts()).length);
+  } catch (err) {
+    pagePorts = err instanceof Error ? err.name : 'error';
+  }
+  let bg: string;
+  try {
+    const info = await sendToBackground<{ available: boolean; ports: number; error: string }>({ kind: 'getSerialInfo' });
+    bg = info.available ? `available, ${info.ports} granted port(s)${info.error ? ` (${info.error})` : ''}` : 'NOT available';
+  } catch {
+    bg = 'not reachable';
+  }
+  setText(
+    $('#serial-diag'),
+    `Diagnostics — Firefox ${firefox} · Web Serial on this page: ${page ? `yes, ${pagePorts} granted port(s)` : 'no'} · in the background: ${bg}`,
+  );
 }
 
 function webSerial(): WebSerialLike | null {
@@ -63,6 +87,7 @@ function fillTransport(): void {
     $('#serial-device'),
     config.device.usbVendorId === null ? 'none chosen yet' : `USB ${hex(config.device.usbVendorId)}:${hex(config.device.usbProductId)}`,
   );
+  if (serial) void renderSerialDiagnostics();
 }
 
 for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) {
@@ -77,6 +102,7 @@ $('#choose-serial').addEventListener('click', () => {
   if (!serial) return;
   const filters = $input('#serial-all').checked ? undefined : [{ usbVendorId: 0x303a }]; // Espressif
   // requestPort must be called directly in the user gesture.
+  const asked = performance.now();
   void serial
     .requestPort(filters ? { filters } : {})
     .then(async (port) => {
@@ -91,8 +117,20 @@ $('#choose-serial').addEventListener('click', () => {
       await runConnectionTest();
     })
     .catch((err: unknown) => {
-      const name = err instanceof Error ? err.name : '';
-      setText($('#serial-error'), name === 'NotFoundError' ? 'No device chosen.' : `Could not select a device (${name || 'error'}).`);
+      const name = err instanceof Error ? err.name : 'Error';
+      const detail = err instanceof Error && err.message ? `${name}: ${err.message}` : name;
+      // A picker the user closed takes a while; an instant rejection means Firefox never showed one.
+      const instant = performance.now() - asked < 400;
+      let hint: string;
+      if (name === 'NotFoundError' && instant) {
+        hint = 'Firefox returned no device without showing a picker. Try “Show all serial devices”; if it stays like this, Firefox lists no usable serial port.';
+      } else if (name === 'NotFoundError') {
+        hint = 'No device was selected. If the list was empty, tick “Show all serial devices” and try again.';
+      } else {
+        hint = 'Firefox refused the request.';
+      }
+      setText($('#serial-error'), `${hint} [${detail}]`);
+      void renderSerialDiagnostics();
     });
 });
 

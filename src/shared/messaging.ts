@@ -153,6 +153,7 @@ export type PageRequest =
   | { kind: 'testAnimation'; animation: Animation }
   | { kind: 'getDebugLog' }
   | { kind: 'getDetectionReports' }
+  | { kind: 'getSerialInfo' }
   | { kind: 'clearDebugLog' };
 
 export function parsePageRequest(raw: unknown): PageRequest | null {
@@ -163,6 +164,7 @@ export function parsePageRequest(raw: unknown): PageRequest | null {
     case 'testConnection':
     case 'getDebugLog':
     case 'getDetectionReports':
+    case 'getSerialInfo':
     case 'clearDebugLog':
       return { kind: m.kind };
     case 'testAnimation':

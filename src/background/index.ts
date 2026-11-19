@@ -120,6 +120,17 @@ async function handlePageRequest(req: PageRequest, b: Bridge): Promise<unknown> 
       return debugLog.entries();
     case 'getDetectionReports':
       return b.detectionReports();
+    case 'getSerialInfo': {
+      // Whether the background (which talks to the robot) can use Web Serial.
+      const provider = webSerialProvider();
+      if (!provider) return { available: false, ports: 0, error: '' };
+      try {
+        const ports = await provider.getPorts();
+        return { available: true, ports: ports.length, error: '' };
+      } catch (err) {
+        return { available: true, ports: 0, error: err instanceof Error ? `${err.name}: ${err.message}`.slice(0, 160) : 'error' };
+      }
+    }
     case 'clearDebugLog':
       debugLog.clear();
       b.clearDetectionReports();
