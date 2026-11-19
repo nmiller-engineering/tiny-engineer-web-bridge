@@ -1,7 +1,8 @@
 /**
- * Background entry point (Firefox MV3 non-persistent background script).
+ * Background entry point: Firefox MV3 non-persistent background script,
+ * or the Chrome MV3 service worker (same code).
  *
- * All listeners are registered synchronously at top level so Firefox can
+ * All listeners are registered synchronously at top level so the browser can
  * wake the script for them. Runtime state survives suspension via
  * `storage.session`; timers that may not survive are backed by an alarm.
  */
@@ -12,7 +13,12 @@ import { isPlatform } from '../shared/types';
 import { Bridge, isBridgeSnapshot } from './bridge';
 import { expectedOrigin, injectIntoOpenTabs, syncContentScripts } from './content-scripts';
 import { DebugLog } from './logger';
+import { RemoteSerialClient, type UsbPingReply } from './remote-serial-client';
 import { webSerialProvider } from './serial-client';
+import { TARGET } from '../shared/target';
+
+const FIREFOX_USB_MESSAGE =
+  'USB is not available in Firefox: Firefox only grants Web Serial to websites (through a site-permission add-on), not to extensions. Please use Wi-Fi.';
 
 const SESSION_KEY = 'runtime';
 const WATCHDOG_ALARM = 'te-watchdog';
@@ -61,6 +67,15 @@ async function init(): Promise<Bridge> {
     clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
     hasDevicePermission: (t) => hasDevicePermission(t.host),
     serialProvider: webSerialProvider,
+    // Firefox: no Web Serial for extensions. Chrome: the worker has none, the USB page does.
+    serialUnavailableMessage: FIREFOX_USB_MESSAGE,
+    serialClient:
+      TARGET === 'chrome'
+        ? new RemoteSerialClient({
+            send: (m) => browser.runtime.sendMessage(m),
+            timeoutMs: () => currentConfig?.timing.requestTimeoutMs ?? 2000,
+          })
+        : undefined,
     onChange: schedulePersist,
     log: debugLog,
   });
@@ -121,7 +136,16 @@ async function handlePageRequest(req: PageRequest, b: Bridge): Promise<unknown> 
     case 'getDetectionReports':
       return b.detectionReports();
     case 'getSerialInfo': {
-      // Whether the background (which talks to the robot) can use Web Serial.
+      if (TARGET === 'chrome') {
+        // Chrome: ask the USB connection page.
+        try {
+          const ping = (await browser.runtime.sendMessage({ kind: 'usbPing', v: 1 })) as UsbPingReply | undefined;
+          return ping ? { available: true, ports: ping.ports, error: '', usbTab: true } : { available: false, ports: 0, error: '', usbTab: false };
+        } catch {
+          return { available: false, ports: 0, error: '', usbTab: false };
+        }
+      }
+      // Firefox: whether the background (which talks to the robot) can use Web Serial.
       const provider = webSerialProvider();
       if (!provider) return { available: false, ports: 0, error: '' };
       try {
@@ -138,26 +162,44 @@ async function handlePageRequest(req: PageRequest, b: Bridge): Promise<unknown> 
   }
 }
 
-browser.runtime.onMessage.addListener((raw: unknown, sender: browser.runtime.MessageSender) => {
-  if (sender.id !== browser.runtime.id) return undefined;
+/**
+ * Answer asynchronously via sendResponse + `return true`. Works in Firefox
+ * and in every Chrome version (older Chrome ignores Promise return values).
+ */
+function reply(work: Promise<unknown>, sendResponse: (response?: unknown) => void): true {
+  work.then(
+    (value) => sendResponse(value),
+    () => sendResponse(undefined),
+  );
+  return true;
+}
+
+browser.runtime.onMessage.addListener(((raw: unknown, sender: browser.runtime.MessageSender, sendResponse: (response?: unknown) => void) => {
+  if (sender.id !== browser.runtime.id) return false;
 
   if (isOwnExtensionPage(sender)) {
     const req = parsePageRequest(raw);
-    if (!req) return undefined;
-    return ready.then((b) => handlePageRequest(req, b));
+    if (!req) return false; // e.g. replies meant for the USB page
+    return reply(
+      ready.then((b) => handlePageRequest(req, b)),
+      sendResponse,
+    );
   }
 
   // Everything else must be a top-frame content script in a tab.
   const tabId = sender.tab?.id;
-  if (tabId === undefined || sender.frameId !== 0) return undefined;
+  if (tabId === undefined || sender.frameId !== 0) return false;
   const msg = parseContentMessage(raw);
-  if (!msg) return undefined;
+  if (!msg) return false;
   const origin = senderOrigin(sender);
-  return ready.then((b) => {
-    const expected = expectedOrigin(msg.platform, b.currentConfig);
-    return b.handleContent(msg, tabId, expected !== null && origin === expected);
-  });
-});
+  return reply(
+    ready.then((b) => {
+      const expected = expectedOrigin(msg.platform, b.currentConfig);
+      return b.handleContent(msg, tabId, expected !== null && origin === expected);
+    }),
+    sendResponse,
+  );
+}) as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
 
 browser.tabs.onRemoved.addListener((tabId) => {
   void ready.then((b) => b.tabRemoved(tabId));

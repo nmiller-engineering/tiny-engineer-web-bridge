@@ -15,6 +15,7 @@ import {
 } from '../shared/config';
 import type { AnimationTestResult, ConnectionTestResult, StatusSnapshot } from '../shared/messaging';
 import { loadConfig, saveConfig } from '../shared/storage';
+import { TARGET } from '../shared/target';
 import { AI_STATES, ANIMATIONS, DISABLED, isAnimation, type Platform } from '../shared/types';
 import { $, $input, CONNECTION_LABELS, connectionTone, formatAgo, platformLabel, sendToBackground, setText, STATE_LABELS, toast } from '../shared/ui';
 
@@ -48,7 +49,7 @@ interface WebSerialLike {
 
 /** USB diagnostics: what this page and the background can see. Shown under the USB section. */
 async function renderSerialDiagnostics(): Promise<void> {
-  const firefox = /Firefox\/([\d.]+)/.exec(navigator.userAgent)?.[1] ?? 'unknown';
+  const browserVersion = /(Firefox|Chrome)\/([\d.]+)/.exec(navigator.userAgent)?.slice(1).join(' ') ?? 'unknown';
   const page = webSerial();
   let pagePorts = '–';
   try {
@@ -57,15 +58,19 @@ async function renderSerialDiagnostics(): Promise<void> {
     pagePorts = err instanceof Error ? err.name : 'error';
   }
   let bg: string;
+  let usbTab = false;
   try {
-    const info = await sendToBackground<{ available: boolean; ports: number; error: string }>({ kind: 'getSerialInfo' });
-    bg = info.available ? `available, ${info.ports} granted port(s)${info.error ? ` (${info.error})` : ''}` : 'NOT available';
+    const info = await sendToBackground<{ available: boolean; ports: number; error: string; usbTab?: boolean }>({ kind: 'getSerialInfo' });
+    usbTab = info.usbTab === true;
+    if (TARGET === 'chrome') bg = usbTab ? `USB tab open, ${info.ports} granted port(s)` : 'USB tab not open';
+    else bg = info.available ? `available, ${info.ports} granted port(s)${info.error ? ` (${info.error})` : ''}` : 'NOT available';
   } catch {
     bg = 'not reachable';
   }
+  if (TARGET === 'chrome') $('#open-usb-tab').textContent = usbTab ? 'Show USB tab' : 'Open USB tab';
   setText(
     $('#serial-diag'),
-    `Diagnostics — Firefox ${firefox} · Web Serial on this page: ${page ? `yes, ${pagePorts} granted port(s)` : 'no'} · in the background: ${bg}`,
+    `Diagnostics — ${browserVersion} · Web Serial on this page: ${page ? `yes, ${pagePorts} granted port(s)` : 'no'} · ${TARGET === 'chrome' ? 'connection' : 'in the background'}: ${bg}`,
   );
 }
 
@@ -76,7 +81,34 @@ function webSerial(): WebSerialLike | null {
 
 const hex = (n: number | null) => (n === null ? '?' : `0x${n.toString(16).padStart(4, '0')}`);
 
+/** Chrome: make sure the USB connection tab exists (and show it). */
+async function ensureUsbTab(focus: boolean): Promise<void> {
+  let tabId: number | null;
+  try {
+    const ping = (await browser.runtime.sendMessage({ kind: 'usbPing', v: 1 })) as { tabId: number | null } | undefined;
+    tabId = ping?.tabId ?? null;
+  } catch {
+    tabId = null;
+  }
+  if (tabId !== null) {
+    if (focus) await browser.tabs.update(tabId, { active: true });
+    return;
+  }
+  await browser.tabs.create({ url: browser.runtime.getURL('usb/index.html'), pinned: true, active: focus });
+  await new Promise((resolve) => setTimeout(resolve, 800)); // let it take the USB lock
+}
+
+$('#open-usb-tab').addEventListener('click', () => void ensureUsbTab(true).then(renderSerialDiagnostics));
+
 function fillTransport(): void {
+  const firefox = TARGET === 'firefox';
+  // Firefox cannot do USB for extensions; keep the option only to switch back from an old setting.
+  const usbRadio = document.querySelector<HTMLInputElement>('input[name="transport"][value="serial"]')!;
+  usbRadio.disabled = firefox && config.device.transport !== 'serial';
+  $('#usb-option').title = firefox ? 'Not available in Firefox' : '';
+  $('#usb-firefox').hidden = !firefox;
+  $('#open-usb-tab').hidden = firefox;
+  $('#usb-tab-hint').hidden = firefox;
   const serial = config.device.transport === 'serial';
   for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) radio.checked = radio.value === config.device.transport;
   $('#serial-section').hidden = !serial;
@@ -114,6 +146,7 @@ $('#choose-serial').addEventListener('click', () => {
       }, 'USB device saved');
       setText($('#serial-error'), '');
       fillTransport();
+      if (TARGET === 'chrome') await ensureUsbTab(false);
       await runConnectionTest();
     })
     .catch((err: unknown) => {
@@ -122,12 +155,14 @@ $('#choose-serial').addEventListener('click', () => {
       // A picker the user closed takes a while; an instant rejection means Firefox never showed one.
       const instant = performance.now() - asked < 400;
       let hint: string;
-      if (name === 'NotFoundError' && instant) {
-        hint = 'Firefox returned no device without showing a picker. Try “Show all serial devices”; if it stays like this, Firefox lists no usable serial port.';
+      if (name === 'NotFoundError' && instant && TARGET === 'firefox') {
+        hint = 'Firefox does not allow extensions to use USB serial ports. Please use Wi-Fi.';
+      } else if (name === 'NotFoundError' && instant) {
+        hint = 'The browser returned no device without showing a picker. Try “Show all serial devices”.';
       } else if (name === 'NotFoundError') {
         hint = 'No device was selected. If the list was empty, tick “Show all serial devices” and try again.';
       } else {
-        hint = 'Firefox refused the request.';
+        hint = 'The browser refused the request.';
       }
       setText($('#serial-error'), `${hint} [${detail}]`);
       void renderSerialDiagnostics();
@@ -185,7 +220,7 @@ $('#device-form').addEventListener('submit', (ev) => {
       await browser.permissions.remove({ origins: [oldPattern] }).catch(() => undefined);
     }
     if (!granted) {
-      setText($('#device-error'), 'Saved, but Firefox access to the robot was not granted. Press the button again and choose “Allow”.');
+      setText($('#device-error'), 'Saved, but the browser did not grant access to the robot. Press the button again and choose “Allow”.');
       return;
     }
     setText($('#device-error'), '');
@@ -299,7 +334,7 @@ function saveOpenWebUI(enable: boolean): void {
         await browser.permissions.remove({ origins: [oldPattern] }).catch(() => undefined);
       }
     }
-    if (enable && !granted) setText($('#openwebui-error'), 'Firefox access to this address was not granted. Press “Save & allow access” and choose “Allow”.');
+    if (enable && !granted) setText($('#openwebui-error'), 'The browser did not grant access to this address. Press “Save & allow access” and choose “Allow”.');
     fillPlatforms();
   });
 }

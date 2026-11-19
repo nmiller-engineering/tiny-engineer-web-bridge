@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiny Engineer – USB connection</title>
+    <link rel="stylesheet" href="../shared/ui.css" />
+    <link rel="stylesheet" href="usb.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <img src="../icons/icon.svg" alt="" width="36" height="36" />
+        <div>
+          <h1>USB connection</h1>
+          <p class="muted small">Tiny Engineer Web Bridge</p>
+        </div>
+        <span class="pill" id="status" data-tone="info">Starting…</span>
+      </header>
+      <p class="notice" data-tone="info">
+        Keep this tab open while you use the robot over USB — pinning it is easiest (right-click the tab → Pin).
+        Chrome's extension background cannot use USB itself, so this tab carries the connection.
+      </p>
+      <p class="notice" data-tone="warn" id="duplicate" hidden>
+        Another USB connection tab is already active. You can close this one.
+      </p>
+      <dl class="facts">
+        <div><dt>Device</dt><dd id="device">–</dd></div>
+        <div><dt>Last command</dt><dd id="last">–</dd></div>
+      </dl>
+      <p class="error-text" id="error" role="alert"></p>
+      <div class="row">
+        <button type="button" class="btn" id="choose">Choose USB device</button>
+        <button type="button" class="btn secondary" id="test">Test connection</button>
+      </div>
+    </main>
+    <script src="usb.js"></script>
+  </body>
+</html>

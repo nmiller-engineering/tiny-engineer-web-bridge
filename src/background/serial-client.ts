@@ -46,6 +46,8 @@ export interface SerialClientDeps {
   provider: () => SerialProvider | null;
   selection: () => SerialSelection;
   timeoutMs: () => number;
+  /** Message shown when Web Serial is missing (browser specific). */
+  unavailableMessage?: string;
 }
 
 /** Retry schedule for the first `sync` after opening (the chip may reboot on open). */
@@ -182,7 +184,7 @@ export class SerialClient implements RobotClient {
 
   private async open(): Promise<void> {
     const provider = this.deps.provider();
-    if (!provider) throw new SerialError('unavailable', 'Web Serial is not available in this Firefox (see README: USB / Web Serial).');
+    if (!provider) throw new SerialError('unavailable', this.deps.unavailableMessage ?? 'Web Serial is not available in this browser context.');
     const port = choosePort(await provider.getPorts(), this.deps.selection());
     if (!port) throw new SerialError('no-permission', 'No USB port has been granted yet. Open the settings and press “Choose USB device”.');
     try {

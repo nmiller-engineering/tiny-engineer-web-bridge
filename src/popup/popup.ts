@@ -50,7 +50,7 @@ async function refresh(): Promise<void> {
   setText($('#last-sent'), s.lastSent ? `sent ${formatAgo(s.lastSent.at)}` : '');
 
   let notice = '';
-  if (s.connection === 'no-permission') notice = s.connectionDetail || 'Firefox needs your permission to reach the robot. Open Settings → “Save & allow access”.';
+  if (s.connection === 'no-permission') notice = s.connectionDetail || 'The browser needs your permission to reach the robot. Open Settings → “Save & allow access”.';
   else if ((s.connection === 'error' || s.connection === 'disconnected') && s.enabled) notice = s.connectionDetail;
   show($('#notice'), notice, s.connection === 'disconnected' ? 'warn' : 'bad');
 }

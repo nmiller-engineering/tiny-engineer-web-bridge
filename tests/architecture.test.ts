@@ -37,6 +37,31 @@ describe('content-script bundles', () => {
   }
 });
 
+describe('Chrome build', () => {
+  it('derives a valid MV3 Chrome manifest', async () => {
+    // @ts-expect-error — plain JS build module
+    const { chromeManifest } = await import('../scripts/build.mjs');
+    const m = chromeManifest(JSON.parse(readFileSync(path.join(root, 'src/manifest.json'), 'utf8')));
+    expect(m.background).toEqual({ service_worker: 'background.js' });
+    expect(m.browser_specific_settings).toBeUndefined();
+    expect(m.minimum_chrome_version).toBe('120');
+    expect(m.permissions.sort()).toEqual(['alarms', 'scripting', 'storage']);
+    expect(m.host_permissions).toEqual(['https://chatgpt.com/*', 'https://claude.ai/*']);
+  });
+
+  for (const p of ['chatgpt', 'claude', 'openwebui']) {
+    it(`${p}: Chrome content bundle has no config, storage or network access either`, async () => {
+      // @ts-expect-error — plain JS build module
+      const { buildOptionsFor } = await import('../scripts/build.mjs');
+      const opts = buildOptionsFor('chrome');
+      const res = await esbuild.build({ ...opts, entryPoints: [`src/content/entry-${p}.ts`], outdir: undefined, write: false, metafile: true, logLevel: 'silent' });
+      const code = res.outputFiles![0]!.text;
+      expect(Object.keys(res.metafile!.inputs).filter((i) => /background\/|shared\/(config|storage)/.test(i))).toEqual([]);
+      expect(code).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|WebSocket|navigator\.serial|browser\.storage|chrome\.storage/);
+    });
+  }
+});
+
 describe('manifest', () => {
   const manifest = JSON.parse(readFileSync(path.join(root, 'src/manifest.json'), 'utf8'));
 

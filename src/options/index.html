@@ -38,7 +38,7 @@
           <h2>Welcome! Three steps to get going</h2>
           <ol class="steps">
             <li><strong>Connect the robot</strong> — enter its IP address (shown on its display) or pick it over USB.</li>
-            <li><strong>Allow access</strong> — Firefox asks once whether the extension may talk to that address.</li>
+            <li><strong>Allow access</strong> — your browser asks once whether the extension may talk to that address.</li>
             <li><strong>Open ChatGPT, Claude or Open WebUI</strong> and send a prompt. The robot thinks, types and rings when it's done.</li>
           </ol>
         </section>
@@ -52,9 +52,14 @@
             </div>
             <div class="seg" role="radiogroup" aria-label="Connection type">
               <label><input type="radio" name="transport" value="http" /><span>Wi-Fi</span></label>
-              <label><input type="radio" name="transport" value="serial" /><span>USB</span></label>
+              <label id="usb-option"><input type="radio" name="transport" value="serial" /><span>USB</span></label>
             </div>
           </div>
+
+          <p class="notice" data-tone="info" id="usb-firefox" hidden>
+            USB isn't available in Firefox: Firefox only grants Web Serial to websites (through a site-permission
+            add-on), not to extensions. Use Wi-Fi — or the Chrome version of this extension, which supports USB.
+          </p>
 
           <form id="device-form" class="stack" novalidate>
             <div class="grid-3">
@@ -80,19 +85,21 @@
               <button type="submit" class="btn" id="save-device">Save &amp; allow access</button>
               <button type="button" class="btn secondary" id="test-connection">Test connection</button>
             </div>
-            <p class="muted small">Wi-Fi traffic to the robot is plain HTTP and not encrypted; the token is stored unencrypted in this Firefox profile.</p>
+            <p class="muted small">Wi-Fi traffic to the robot is plain HTTP and not encrypted; the token is stored unencrypted in this browser profile.</p>
           </form>
 
           <div id="serial-section" class="stack" hidden>
             <p class="notice" data-tone="warn" id="serial-unavailable" hidden>
-              Web Serial isn't available in this Firefox, so USB can't be used here. Please use Wi-Fi.
+              Web Serial isn't available in this browser, so USB can't be used here. Please use Wi-Fi.
             </p>
             <p class="muted">Plug the robot in by USB and choose its serial port. Close other programs that use the port first
               (e.g. <code>tiny-engineer daemon release</code>). USB has no token — physical access is enough to control the robot.</p>
             <div class="row">
               <button type="button" class="btn" id="choose-serial">Choose USB device</button>
+              <button type="button" class="btn secondary" id="open-usb-tab" hidden>Open USB tab</button>
               <button type="button" class="btn secondary" id="test-serial">Test connection</button>
             </div>
+            <p class="muted small" id="usb-tab-hint" hidden>Chrome keeps the USB connection in a separate tab. It opens automatically after you choose a device — keep it open (pinning it is easiest).</p>
             <label class="inline-check"><input type="checkbox" id="serial-all" /> Show all serial devices, not only Espressif boards</label>
             <p class="muted small">Selected device: <span id="serial-device">none</span></p>
             <p class="error-text" id="serial-error" role="alert"></p>

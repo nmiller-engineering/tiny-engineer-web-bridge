@@ -11,7 +11,11 @@ Preparation: `npm run build`, load `dist/manifest.json` via `about:debugging`, e
 - [ ] Unplug robot power during use → Disconnected; plug back → reconnects within ~1 min (auto-reconnect on) and shows the current state.
 - [ ] Each Test button in Animations plays the animation; normal control resumes after ~6 s.
 
-## Connection (USB / Web Serial)
+## Chrome
+- [ ] `chrome://extensions` → Developer mode → Load unpacked `dist-chrome/` (or the extracted `-chrome.zip`); settings page opens.
+- [ ] Wi-Fi connection test and the per-platform checks below work as in Firefox.
+
+## Connection (USB / Web Serial — Chrome only; Firefox shows it as unavailable)
 - [ ] Options show whether Web Serial is available in this Firefox.
 - [ ] Choose USB device lists the robot; Test connection reports “over USB” and the firmware version.
 - [ ] Animations play over USB while the robot's Wi-Fi is off/USB-only.

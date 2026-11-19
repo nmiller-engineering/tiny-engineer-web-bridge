@@ -92,3 +92,23 @@ The background is a non-persistent event page. Listeners are registered synchron
 | Framing | HTTP/JSON | COBS frames, 7-byte header, JSON payloads, 115200 baud |
 
 Both implement `RobotClient`; `Bridge.client` picks one from `config.device.transport`.
+
+## Browser targets
+
+One codebase, two builds (`scripts/build.mjs --target=firefox|chrome`):
+
+| | Firefox (`dist/`) | Chrome (`dist-chrome/`) |
+| --- | --- | --- |
+| Background | MV3 event page (`background.scripts`) | MV3 service worker (`background.service_worker`) |
+| Manifest | `browser_specific_settings.gecko` (id, `data_collection_permissions`) | derived via `chromeManifest()`; `minimum_chrome_version: 120` |
+| API namespace | `browser.*` | `browser.*` (Chrome ≥ 13x exposes it; a one-line banner aliases `chrome` for older versions) |
+| USB | not available — Firefox grants Web Serial only to websites via site-permission add-ons | `RemoteSerialClient` in the worker forwards `auth/health/anim-get/anim` to `usb/index.html`, which owns the port with the same `SerialClient` |
+
+`src/shared/target.ts` exposes the build target (`__TARGET__`). Messages are answered with `sendResponse` + `return true`, which works in both browsers.
+
+```
+Chrome service worker ── usbRequest {op, animation} ──▶ USB connection tab (Web Lock: one active)
+       (no Web Serial)  ◀── DeviceResult (validated) ──     SerialClient → navigator.serial → robot
+```
+
+`tests-e2e/chrome.e2e.mjs` loads the Chrome build into real Chromium with the mock robot and a local Open WebUI fixture and checks settings → worker → HTTP, page detection → robot commands, the popup and the USB-tab routing.

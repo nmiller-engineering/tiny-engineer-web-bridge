@@ -114,11 +114,14 @@ export async function createZip(baseDir, files, epochSeconds = 315532800) {
 }
 
 async function main() {
-  const manifest = JSON.parse(await readFile(path.join(dist, 'manifest.json'), 'utf8'));
+  // --target=chrome packages dist-chrome/ as a .zip (Chrome Web Store / "Load unpacked" after extracting).
+  const chrome = process.argv.includes('--target=chrome');
+  const sourceDir = chrome ? path.join(root, 'dist-chrome') : dist;
+  const manifest = JSON.parse(await readFile(path.join(sourceDir, 'manifest.json'), 'utf8'));
   const epoch = process.env.SOURCE_DATE_EPOCH ? Number(process.env.SOURCE_DATE_EPOCH) : 315532800;
-  const xpi = await createXpi(dist, epoch);
+  const xpi = await createXpi(sourceDir, epoch);
   await mkdir(outDir, { recursive: true });
-  const file = path.join(outDir, `tiny-engineer-web-bridge-${manifest.version}.xpi`);
+  const file = path.join(outDir, chrome ? `tiny-engineer-web-bridge-${manifest.version}-chrome.zip` : `tiny-engineer-web-bridge-${manifest.version}.xpi`);
   await writeFile(file, xpi);
   const sha = createHash('sha256').update(xpi).digest('hex');
   console.log(`${path.relative(root, file)}  ${xpi.length} bytes`);

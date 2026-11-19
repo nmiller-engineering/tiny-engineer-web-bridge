@@ -7,8 +7,9 @@ All notable changes to this project are documented here. The format follows [Kee
 First public release.
 
 ### Added
+- **Chrome / Chromium** build (`npm run build:chrome`, `npm run package:chrome`) from the same codebase, with an automated end-to-end test in real Chromium (`npm run test:e2e`).
 - Detection of AI activity on **ChatGPT**, **Claude** and any self-hosted **Open WebUI** from page structure only (idle, user typing, thinking, responding, tool use, completed, error, unknown). No conversation content is read.
-- Direct control of the Tiny Engineer robot over **Wi-Fi** (HTTP API, optional Bearer token) or **USB** (Web Serial, upstream serial protocol).
+- Direct control of the Tiny Engineer robot over **Wi-Fi** (HTTP API, optional Bearer token) or, in Chrome, **USB** (Web Serial via a pinned “USB connection” tab, upstream serial protocol). USB is not available in Firefox, which grants Web Serial only to websites.
 - Configurable animation for each state with one-click test, plus “Do nothing”.
 - Central state machine with debouncing, duplicate suppression, last-state-wins queue, reconnect back-off, keepalive for long answers and a lost-signal fallback.
 - Multi-tab handling: *Active tab* or *Busy tab first*.

@@ -27,6 +27,9 @@
 
 ## USB / Web Serial
 
+- **Firefox:** disabled — Firefox does not grant Web Serial to extensions.
+- **Chrome:** the service worker has no Web Serial; a dedicated extension page (`usb/index.html`) owns the port. It accepts device requests only from this extension's service worker (sender id and URL checked, no tab), only the operations `auth`/`health`/`anim-get`/`anim` with an allowlisted animation, and only while it holds a Web Lock (one active tab). The worker validates the page's answers (error kinds allowlisted, strings length-limited).
+
 - The port is selected by the user via `navigator.serial.requestPort()` on the options page; the background only uses already granted ports (`getPorts()`) and never prompts.
 - Only `sync`, `health` and `anim` (allowlisted name) are sent; log/event/stream frames from the device are ignored; frames are size-bounded and malformed frames are dropped.
 - The serial protocol has no authentication: anyone with physical access can control the robot.

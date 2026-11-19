@@ -199,7 +199,7 @@ export class DeviceClient implements RobotClient {
       return {
         ok: false,
         error: 'no-permission',
-        message: 'Firefox has not granted access to the robot address yet. Open the settings and press “Save & allow access”.',
+        message: 'The browser has not granted access to the robot address yet. Open the settings and press “Save & allow access”.',
       };
     }
 

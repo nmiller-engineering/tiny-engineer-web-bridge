@@ -29,6 +29,10 @@ export interface BridgeDeps {
   hasDevicePermission?: (target: DeviceTarget) => Promise<boolean>;
   /** Web Serial provider (navigator.serial) — null/absent when unavailable. */
   serialProvider?: () => SerialProvider | null;
+  /** Use this client for USB instead of a local SerialClient (Chrome: the USB page). */
+  serialClient?: RobotClient;
+  /** Shown when USB cannot work in this browser. */
+  serialUnavailableMessage?: string;
   /** Called (debounced by the caller if desired) whenever state worth persisting changes. */
   onChange?: () => void;
   log?: DebugLog;
@@ -78,7 +82,7 @@ export class Bridge {
   readonly queue: CommandQueue;
   readonly state: StateManager;
   private readonly httpClient: DeviceClient;
-  private readonly serialClient: SerialClient;
+  private readonly serialClient: RobotClient;
   private config: Config;
   private status: StatusState = {
     connection: 'unknown',
@@ -110,11 +114,14 @@ export class Bridge {
     this.config = config;
     if (!isDeviceConfigured(config)) this.status.connection = 'unconfigured';
 
-    this.serialClient = new SerialClient({
-      provider: () => deps.serialProvider?.() ?? null,
-      selection: () => ({ usbVendorId: this.config.device.usbVendorId, usbProductId: this.config.device.usbProductId }),
-      timeoutMs: () => this.config.timing.requestTimeoutMs,
-    });
+    this.serialClient =
+      deps.serialClient ??
+      new SerialClient({
+        provider: () => deps.serialProvider?.() ?? null,
+        selection: () => ({ usbVendorId: this.config.device.usbVendorId, usbProductId: this.config.device.usbProductId }),
+        timeoutMs: () => this.config.timing.requestTimeoutMs,
+        unavailableMessage: deps.serialUnavailableMessage,
+      });
 
     this.httpClient = new DeviceClient({
       fetch: deps.fetch,
@@ -174,7 +181,7 @@ export class Bridge {
       prev.device.token !== next.device.token;
     if (deviceChanged) {
       // Release the USB port when switching away from it or to another device.
-      void this.serialClient.close();
+      void this.serialClient.close?.();
       this.queue.invalidate();
       this.queue.resetBackoff();
       this.status = {
