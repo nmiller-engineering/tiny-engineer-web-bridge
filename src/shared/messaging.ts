@@ -65,6 +65,8 @@ export interface ContentReply {
   debounceMs: number;
   typingIdleMs: number;
   completionMs: number;
+  /** A request counts as finished only after this long without busy signals. */
+  taskEndMs: number;
   heartbeatMs: number;
   /** Record a structural detection report (only while debug logging is on). */
   trace: boolean;

@@ -13,7 +13,11 @@ export const claudeProfile: PlatformProfile = {
   composer: ['[data-testid="chat-input"]', 'div.ProseMirror[contenteditable="true"]', 'fieldset [contenteditable="true"]'],
   stopButtons: ['button[data-testid="stop-button"]'],
   stopLabels: [{ scope: null, pattern: /^stop (response|generating)$/i }],
+  // Turn-level busy markers seen in a live detection report (2026-11-19): present on the
+  // message while Claude works, removed when the reply is finished. Assumed to persist
+  // across the steps of an agent run (unlike data-is-streaming).
   generating: [],
+  busy: ['[data-testid="assistant-message"][data-busy]:not([data-busy="false"])', '[data-testid="assistant-message"] [data-transcript-live]'],
   streaming: ['[data-is-streaming="true"]'],
   thinking: [],
   // No reliable, language-independent tool markers are known for claude.ai;

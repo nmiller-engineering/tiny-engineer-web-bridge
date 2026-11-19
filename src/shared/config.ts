@@ -55,6 +55,11 @@ export interface TimingConfig {
   keepaliveMs: number;
   /** User-typing state ends after this much keyboard inactivity. */
   typingIdleMs: number;
+  /**
+   * "Completed" only after this long without any busy signal. Agents pause
+   * between steps (tool execution); shorter gaps must not count as done.
+   */
+  taskEndMs: number;
 }
 
 export interface Config {
@@ -94,6 +99,7 @@ export const DEFAULT_TIMING: TimingConfig = {
   staleMs: 30_000,
   keepaliveMs: 60_000,
   typingIdleMs: 4000,
+  taskEndMs: 2000,
 };
 
 /** Inclusive bounds for every timing value (ms). */
@@ -105,6 +111,7 @@ export const TIMING_BOUNDS: Record<keyof TimingConfig, readonly [number, number]
   staleMs: [5000, 600_000],
   keepaliveMs: [0, 600_000],
   typingIdleMs: [1000, 60_000],
+  taskEndMs: [300, 30_000],
 };
 
 export const DEFAULT_CONFIG: Config = {

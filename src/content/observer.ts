@@ -25,16 +25,18 @@ function parseReply(raw: unknown): ContentReply | null {
   const completionMs = num(r.completionMs);
   const heartbeatMs = num(r.heartbeatMs);
   const trace = r.trace === true;
+  const taskEndMs = num(r.taskEndMs) ?? 2000; // older backgrounds did not send it
   if (typeof r.active !== 'boolean' || debounceMs === null || typingIdleMs === null || completionMs === null || heartbeatMs === null) {
     return null;
   }
-  return { active: r.active, debounceMs, typingIdleMs, completionMs, heartbeatMs, trace };
+  return { active: r.active, debounceMs, typingIdleMs, completionMs, heartbeatMs, trace, taskEndMs };
 }
 
 export function detectorTimingFromReply(reply: ContentReply): Partial<DetectorTiming> {
   return {
     debounceMs: reply.debounceMs,
     typingIdleMs: reply.typingIdleMs,
+    endGraceMs: reply.taskEndMs,
     // Report `completed` a little longer than the background shows it, so
     // the background (not message timing) decides when it ends.
     completedHoldMs: reply.completionMs + 1000,

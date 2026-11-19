@@ -102,7 +102,7 @@ describe.each(SCENARIOS)('$name detector (fixtures)', (sc) => {
     expect(detector.getState()).toBe('responding');
     expect(detector.getSnapshot().signals).toContain('response-activity');
     loadFixture(sc.dir, 'completed');
-    await tick(1200);
+    await tick(2500); // completion waits 2 s without busy signals (agents pause between steps)
     expect(detector.getState()).toBe('completed');
     await tick(3500);
     expect(detector.getState()).toBe('idle');
@@ -306,7 +306,7 @@ describe('detection report (debug only)', () => {
     await tick(800);
     await stream('.answer', 900);
     loadFixture('claude', 'completed');
-    await tick(1500);
+    await tick(2600);
     expect(reports).toHaveLength(1);
     const json = JSON.stringify(reports[0]);
     expect(json).not.toMatch(/Thinking|Hello|Question|Partial|token|Full answer|Write your prompt|Earlier chat/);
@@ -499,9 +499,55 @@ describe('active answer block decides thinking / tool use / responding (Claude)'
     addBlock('status', 'Searching the web for secret-topic');
     await tick(600);
     loadFixture('claude', 'completed');
-    await tick(1500);
+    await tick(2600);
     const json = JSON.stringify([detector.getSnapshot(), reports]);
     expect(json).not.toMatch(/Searching|secret-topic/);
     expect(json).toContain('block:tool');
+  });
+});
+
+
+describe('agent runs: "completed" only when the whole task is finished', () => {
+  function setStreaming(on: boolean): void {
+    document.querySelector('[data-testid="assistant-message"]')!.setAttribute('data-is-streaming', String(on));
+  }
+  function setBusy(on: boolean): void {
+    const m = document.querySelector('[data-testid="assistant-message"]')!;
+    if (on) m.setAttribute('data-busy', 'true');
+    else {
+      m.removeAttribute('data-busy');
+      m.removeAttribute('aria-busy');
+      document.querySelector('[data-transcript-live]')?.removeAttribute('data-transcript-live');
+    }
+  }
+
+  it('pauses between steps (no busy marker) shorter than the wait do not complete', async () => {
+    loadFixture('claude', 'live-blocks');
+    setBusy(false);
+    start(claudeProfile);
+    for (let step = 0; step < 3; step++) {
+      setStreaming(true);
+      await grow(addBlock('text').querySelector('p')!, 900);
+      setStreaming(false); // step done, tool executes
+      await tick(1500);
+      expect(detector.getState()).not.toBe('completed');
+    }
+    await tick(2500); // final: nothing restarts
+    expect(emitted.filter((s) => s === 'completed')).toHaveLength(1);
+    expect(emitted).not.toContain('idle');
+  });
+
+  it('a turn-level busy marker keeps a long tool step running', async () => {
+    loadFixture('claude', 'live-blocks');
+    start(claudeProfile);
+    await grow(addBlock('text').querySelector('p')!, 900);
+    setStreaming(false); // streaming paused for a long-running command…
+    await tick(8000); // …but the message is still marked busy
+    expect(detector.getState()).toBe('thinking');
+    expect(emitted).not.toContain('completed');
+    setBusy(false); // the whole reply is finished
+    await tick(2500);
+    expect(detector.getState()).toBe('completed');
+    expect(emitted.filter((s) => s === 'completed')).toHaveLength(1);
   });
 });

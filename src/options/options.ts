@@ -437,6 +437,7 @@ const TIMING_LABELS: Record<keyof TimingConfig, [string, string]> = {
   staleMs: ['Lost-signal timeout', 'Back to rest if a busy tab goes silent'],
   keepaliveMs: ['Long-answer keepalive', 'Refresh long animations (0 = off)'],
   typingIdleMs: ['Typing ends after', 'Keyboard pause that ends “User typing”'],
+  taskEndMs: ['Wait before “completed”', 'Pauses between agent steps shorter than this keep the task running'],
 };
 
 function buildTiming(): void {

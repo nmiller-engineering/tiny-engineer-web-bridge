@@ -21,6 +21,7 @@ Extended reasoning that streams text into the page usually appears as `respondin
 | Date | Platform | Result |
 | --- | --- | --- |
 | 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking not shown. Tool/command use shown as thinking (no Claude tool rule yet). |
+| 2026-11-19 | Claude | Agent runs rang “completed” after each step (streaming pauses during tool execution > 0.7 s end grace). Now: 2 s task-end wait + turn-level busy markers. |
 | 2026-11-19 | Claude | Root cause of unreliable initial thinking: before the answer element exists, no signal was visible (stop button not matched). New layer: submit detection (Enter/send) → thinking immediately; block model for thinking/tool blocks. Real-Chromium test: Enter → robot `thinking` in ~330 ms. Awaiting live verification on claude.ai. |
 | 2026-11-19 | Claude | A rule ignoring changes inside `aria-busy`/status elements broke responding (Claude marks the streaming message busy) → **reverted**. Detection report verified `div[data-testid=assistant-message][data-is-streaming]`, answer text in `div.prose > div[data-alluvium]` as `span[data-wf]` chunks; the stop button was **not** matched. In the reported request, text started ~50 ms after the request (no visible thinking phase). Next: report from a request with a visible “Thinking…” phase and a tool call. |
 
@@ -31,7 +32,7 @@ With **Debug log** on, the extension records a structural trace of each request:
 ## Detection design (layers, fastest first)
 
 1. **Submit** — Enter (without Shift, not during IME composition) in a non-empty prompt box, or a click on the send control with a draft, starts a *pending request* → `thinking` immediately. It is confirmed when a new user message appears (`userMessage` selectors) and then lasts until the answer starts (max. 60 s); unconfirmed it expires after 4 s. This covers the phase before the platform creates any answer element (on Claude: before `data-is-streaming` appears), which is when users see “thinking”.
-2. **Lifecycle** — stop control / streaming / busy markers start and end a generation (end needs 700 ms without signals).
+2. **Lifecycle** — stop control / streaming / busy markers start a generation. It **ends only after 2 s without any busy signal** (configurable: *Wait before “completed”*), so pauses between the steps of an agent run (tool execution) keep the task running and show `thinking` instead of `completed`. On Claude, turn-level busy markers on the message (`data-busy`, `data-transcript-live`; seen live, removed when the reply is finished) keep longer tool steps running; that they persist across agent steps is assumed.
 3. **Active answer block** (profiles with a block model; Claude) — the last block of the streaming answer decides:
    text block (`.prose`) → `responding` while it grows, `thinking` during pauses; non-text block → its short status header is classified: thinking vocabulary → `thinking`, tool vocabulary → `tool_use`, unknown → `thinking` (never “responding”).
 4. **Answer activity** — fallback for platforms without a block model: DOM growth in the answer area → `responding`, otherwise `thinking`.

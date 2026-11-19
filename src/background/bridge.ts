@@ -218,6 +218,7 @@ export class Bridge {
       active,
       debounceMs: t.debounceMs,
       typingIdleMs: t.typingIdleMs,
+      taskEndMs: t.taskEndMs,
       completionMs: t.completionMs,
       heartbeatMs: Math.max(2000, Math.min(10_000, Math.floor(t.staleMs / 3))),
       trace: this.config.debugLogging,

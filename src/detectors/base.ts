@@ -46,8 +46,14 @@ export interface PlatformProfile {
   stopButtons: string[];
   /** aria-label fallbacks for stop controls (UI-language dependent). */
   stopLabels: LabelRule[];
-  /** "Request in progress" markers that do not imply output yet. */
+  /** "Request in progress" markers that do not imply output yet (small indicator elements; changes inside them are not answer output). */
   generating: string[];
+  /**
+   * Turn-level busy markers on containers (e.g. the whole answer message):
+   * the task is running while one is present. Unlike `generating`, changes
+   * inside them still count as answer output.
+   */
+  busy?: string[];
   /** Explicit "output is streaming" markers. */
   streaming: string[];
   /** Explicit "model is thinking/reasoning" markers. */
@@ -80,7 +86,11 @@ export interface DetectorTiming {
   completedHoldMs: number;
   /** How long a new error is reported. */
   errorHoldMs: number;
-  /** Generation is considered over only after signals are absent this long (stop buttons flicker between tool calls). */
+  /**
+   * Generation is considered over only after all busy signals are absent this
+   * long. Agents pause between steps (tool execution); those gaps keep the
+   * task running (reported as thinking) instead of completing it.
+   */
   endGraceMs: number;
   /** Response DOM activity counts as "streaming" for this long. */
   activityWindowMs: number;
@@ -97,7 +107,7 @@ export const DEFAULT_DETECTOR_TIMING: DetectorTiming = {
   typingIdleMs: 4000,
   completedHoldMs: 3000,
   errorHoldMs: 8000,
-  endGraceMs: 700,
+  endGraceMs: 2000,
   activityWindowMs: 2500,
   unrecognizedAfterMs: 5000,
   pendingUnconfirmedMs: 4000,
@@ -116,6 +126,7 @@ export interface RawSignals {
   response: boolean;
   stop: boolean;
   generatingMarker: boolean;
+  busyMarker: boolean;
   streamingMarker: boolean;
   thinkingMarker: boolean;
   toolMarker: boolean;
@@ -500,6 +511,7 @@ export class DomDetector implements AIDetector {
       response: safeQueryAll(doc, p.response.join(', ') || ':not(*)').length > 0,
       stop,
       generatingMarker: anyShown(doc, p.generating),
+      busyMarker: anyShown(doc, p.busy ?? []),
       streamingMarker: anyShown(doc, p.streaming),
       thinkingMarker: anyShown(doc, p.thinking),
       toolMarker: anyShown(doc, p.tool),
@@ -549,7 +561,7 @@ export class DomDetector implements AIDetector {
   }
 
   private traceSignals(raw: RawSignals, now: number): void {
-    const on = (['composer', 'stop', 'generatingMarker', 'streamingMarker', 'thinkingMarker', 'toolMarker'] as const).filter((k) => raw[k]);
+    const on = (['composer', 'stop', 'generatingMarker', 'busyMarker', 'streamingMarker', 'thinkingMarker', 'toolMarker'] as const).filter((k) => raw[k]);
     const key = `${on.join(',')}|err${raw.errorCount}`;
     if (key === this.lastRawKey) return;
     this.lastRawKey = key;
@@ -577,10 +589,10 @@ export class DomDetector implements AIDetector {
       if (now - t.submitAt > 5000) t.submitAt = Number.NEGATIVE_INFINITY;
     }
 
-    const rawGenerating = raw.stop || raw.generatingMarker || raw.streamingMarker;
+    const rawGenerating = raw.stop || raw.generatingMarker || raw.busyMarker || raw.streamingMarker;
     if (this.trace.enabled) this.traceSignals(raw, now);
     if (raw.stop) signals.push('stop-button');
-    if (raw.generatingMarker) signals.push('generating-marker');
+    if (raw.generatingMarker || raw.busyMarker) signals.push('generating-marker');
     if (raw.streamingMarker) signals.push('streaming-marker');
     if (raw.composer) signals.push('composer');
 

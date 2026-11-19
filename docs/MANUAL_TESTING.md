@@ -30,6 +30,7 @@ Preparation: `npm run build`, load `dist/manifest.json` via `about:debugging`, e
 - [ ] Extended thinking / tool use (web search, running a command): Diagnostics shows `block-thinking` / `block-tool`; robot `thinking` / `reading`.
 - [ ] Answer streams → Responding → robot `typing`.
 - [ ] Answer finishes → Completed → robot `ring`, then idle, no further command.
+- [ ] Agent/multi-step task (several tool calls): **no** `ring` between steps; exactly one `ring` when the whole task is finished.
 - [ ] Click Stop during an answer → idle, **no** `ring`.
 - [ ] Long answer (> 5 min, e.g. deep research) → robot does not switch to `attention` mid-answer.
 - [ ] Tool use / web search (Open WebUI) → Using a tool → robot `reading`.
