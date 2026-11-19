@@ -41,6 +41,7 @@
 | `storage` | settings (`local`), runtime state across suspension (`session`) |
 | `scripting` | register detectors only for enabled platforms; inject into tabs already open |
 | `alarms` | watchdog so the robot never stays busy after a lost signal while the background is suspended |
+| `contextMenus` | right-click menu of the toolbar icon (on/off, one-click mode, settings); no page context menus |
 | host `https://chatgpt.com/*`, `https://claude.ai/*` | run the detectors there |
 | optional host (requested per host) | the robot's address; the Open WebUI origin |
 

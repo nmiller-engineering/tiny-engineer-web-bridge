@@ -8,7 +8,8 @@
  */
 import { deviceMatchPattern, type Config } from '../shared/config';
 import { parseContentMessage, parsePageRequest, type PageRequest } from '../shared/messaging';
-import { CONFIG_KEY, loadConfig } from '../shared/storage';
+import { CONFIG_KEY, loadConfig, saveConfig } from '../shared/storage';
+import { actionUiFor, MENU_POPUP_MODE, MENU_SETTINGS, MENU_TOGGLE, TOGGLE_COMMAND } from './action-ui';
 import { isPlatform } from '../shared/types';
 import { Bridge, isBridgeSnapshot } from './bridge';
 import { expectedOrigin, injectIntoOpenTabs, syncContentScripts } from './content-scripts';
@@ -57,6 +58,53 @@ async function hasDevicePermission(host: string): Promise<boolean> {
   }
 }
 
+// ------------------------------------------------------------ toolbar icon
+
+async function shortcutText(): Promise<string> {
+  try {
+    const commands = await browser.commands.getAll();
+    return commands.find((c) => c.name === TOGGLE_COMMAND)?.shortcut ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** Icon, badge, tooltip, click behaviour and menu titles for the current config. */
+async function applyActionUi(config: Config): Promise<void> {
+  const ui = actionUiFor(config, await shortcutText());
+  const action = browser.action as typeof browser.action & { setBadgeTextColor?: (d: { color: string }) => Promise<void> };
+  await Promise.all([
+    action.setIcon({ path: ui.icon }),
+    action.setBadgeText({ text: ui.badgeText }),
+    action.setBadgeBackgroundColor({ color: ui.badgeColor }),
+    action.setBadgeTextColor?.({ color: '#ffffff' }),
+    action.setTitle({ title: ui.title }),
+    action.setPopup({ popup: ui.popup }),
+  ]).catch(() => undefined);
+  await browser.contextMenus.update(MENU_TOGGLE, { title: ui.toggleMenuTitle }).catch(() => undefined);
+  await browser.contextMenus.update(MENU_POPUP_MODE, { checked: config.toolbarClick === 'toggle' }).catch(() => undefined);
+}
+
+/** (Re)create the icon's right-click menu. Idempotent. */
+async function createMenus(config: Config): Promise<void> {
+  const ui = actionUiFor(config, await shortcutText());
+  const contexts = ['action'] as unknown as browser.contextMenus.ContextType[];
+  try {
+    await browser.contextMenus.removeAll();
+    browser.contextMenus.create({ id: MENU_TOGGLE, title: ui.toggleMenuTitle, contexts });
+    browser.contextMenus.create({ id: MENU_POPUP_MODE, title: 'One click on the icon turns on/off', type: 'checkbox', checked: config.toolbarClick === 'toggle', contexts });
+    browser.contextMenus.create({ id: MENU_SETTINGS, title: 'Settings', contexts });
+  } catch {
+    /* menus unavailable — the icon still works */
+  }
+}
+
+async function toggleBridge(): Promise<void> {
+  const config = await loadConfig();
+  config.enabled = !config.enabled;
+  await saveConfig(config); // storage.onChanged applies it everywhere
+}
+
 async function init(): Promise<Bridge> {
   const config = await loadConfig();
   currentConfig = config;
@@ -102,6 +150,7 @@ async function init(): Promise<Bridge> {
   }
 
   bridge = b;
+  void createMenus(config).then(() => applyActionUi(config));
   void syncContentScripts(config).catch((e: unknown) => debugLog.log(`content script sync failed: ${String(e)}`));
   b.tick();
   schedulePersist();
@@ -201,6 +250,27 @@ browser.runtime.onMessage.addListener(((raw: unknown, sender: browser.runtime.Me
   );
 }) as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
 
+// One-click mode: the popup is disabled, so clicks arrive here.
+browser.action.onClicked.addListener(() => {
+  void ready.then(() => toggleBridge());
+});
+
+browser.commands.onCommand.addListener((command) => {
+  if (command === TOGGLE_COMMAND) void ready.then(() => toggleBridge());
+});
+
+browser.contextMenus.onClicked.addListener((info) => {
+  void ready.then(async () => {
+    if (info.menuItemId === MENU_TOGGLE) await toggleBridge();
+    else if (info.menuItemId === MENU_SETTINGS) await browser.runtime.openOptionsPage();
+    else if (info.menuItemId === MENU_POPUP_MODE) {
+      const config = await loadConfig();
+      config.toolbarClick = info.checked ? 'toggle' : 'popup';
+      await saveConfig(config);
+    }
+  });
+});
+
 browser.tabs.onRemoved.addListener((tabId) => {
   void ready.then((b) => b.tabRemoved(tabId));
 });
@@ -241,6 +311,7 @@ browser.storage.onChanged.addListener((changes, area) => {
     const next = await loadConfig();
     currentConfig = next;
     b.setConfig(next);
+    await applyActionUi(next);
     const added = await syncContentScripts(next).catch(() => []);
     // Platforms that were just switched on: inject into tabs already open.
     for (const p of added) {

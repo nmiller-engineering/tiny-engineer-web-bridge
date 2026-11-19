@@ -189,6 +189,19 @@
               <span><strong>Busy tab first</strong><span class="muted small">A tab that is generating may control the robot, even in the background.</span></span>
             </label>
           </fieldset>
+          <fieldset class="choice-cards">
+            <legend class="sr-only">Toolbar icon</legend>
+            <label class="choice">
+              <input type="radio" name="toolbarClick" value="popup" />
+              <span><strong>Icon opens the status popup</strong><span class="muted small">On/off switch inside the popup.</span></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="toolbarClick" value="toggle" />
+              <span><strong>One click turns on/off</strong><span class="muted small">Settings via right-click on the icon.</span></span>
+            </label>
+          </fieldset>
+          <p class="muted small">Keyboard shortcut to turn the bridge on/off: <kbd id="shortcut">–</kbd>
+            <span id="shortcut-hint"></span></p>
           <details class="advanced">
             <summary>Timing <span class="muted small">— advanced</span></summary>
             <div class="grid-2" id="timing"></div>

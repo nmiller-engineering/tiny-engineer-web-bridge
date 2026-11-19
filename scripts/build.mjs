@@ -45,6 +45,8 @@ const COMMON_STATIC = [
   'icons/icon-48.png',
   'icons/icon-96.png',
   'icons/icon-128.png',
+  'icons/icon-off-16.png',
+  'icons/icon-off-32.png',
 ];
 
 function entriesFor(target) {

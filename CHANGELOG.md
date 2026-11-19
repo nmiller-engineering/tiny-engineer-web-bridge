@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-11-19
+
+### Added
+- **Toolbar on/off:** the toolbar icon turns grey with an “OFF” badge while the bridge is off.
+- **Keyboard shortcut** **Alt+Shift+R** turns the bridge on/off (changeable in the browser's extension shortcut settings).
+- **One-click mode (optional):** a click on the icon turns the bridge on/off instead of opening the popup; settings and on/off are in the icon's right-click menu. Choose under Settings → Behaviour or via the right-click menu.
+
+### Changed
+- New permission `contextMenus` (right-click menu of the toolbar icon only).
+
 ## [1.0.0] - 2026-11-18
 
 First public release.
@@ -23,4 +33,5 @@ First public release.
 ### Security
 - Strict message validation and origin binding, minimal permissions, per-host permission prompts, no runtime dependencies, no telemetry. See SECURITY.md for the review log.
 
+[1.1.0]: https://github.com/nmiller-engineering/tiny-engineer-web-bridge/releases/tag/v1.1.0
 [1.0.0]: https://github.com/nmiller-engineering/tiny-engineer-web-bridge/releases/tag/v1.0.0
