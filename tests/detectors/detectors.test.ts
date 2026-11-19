@@ -273,24 +273,23 @@ describe('privacy of label inspection', () => {
   });
 });
 
-describe('initial thinking with a status header in the answer area (Claude)', () => {
-  it('stays "thinking" while only the status header/spinner changes, then "responding"', async () => {
+describe('Claude live structure (from a real detection report)', () => {
+  it('counts animated text spans inside a busy-marked message as responding', async () => {
     loadFixture('claude', 'idle');
     start(claudeProfile);
     await tick(500);
-    loadFixture('claude', 'thinking-status');
-    const status = document.querySelector('.status-text')!;
-    const spinner = document.querySelector('.spinner')!;
-    for (let i = 0; i < 12; i++) {
-      status.firstChild!.nodeValue = i % 2 ? 'Thinking.' : 'Thinking..'; // animated status text
-      spinner.append(document.createElementNS('http://www.w3.org/2000/svg', 'circle'));
+    loadFixture('claude', 'live-streaming');
+    const p = document.querySelector('.answer')!;
+    for (let i = 0; i < 15; i++) {
+      const span = document.createElement('span');
+      span.className = '_animating_ta2es_10';
+      span.setAttribute('data-wf', '');
+      span.append(document.createTextNode(' word'));
+      p.append(span);
       await tick(150);
     }
-    expect(detector.getState()).toBe('thinking');
-    expect(detector.getSnapshot().signals).not.toContain('response-activity');
-    await stream('.answer', 1500); // real answer text arrives
     expect(detector.getState()).toBe('responding');
-    expect(emitted).toEqual(['thinking', 'responding']);
+    expect(detector.getSnapshot().signals).toEqual(expect.arrayContaining(['streaming-marker', 'response-activity']));
   });
 });
 
@@ -303,7 +302,7 @@ describe('detection report (debug only)', () => {
     detector.trace.setEnabled(true);
     detector.initialize();
     await tick(500);
-    loadFixture('claude', 'thinking-status');
+    loadFixture('claude', 'live-streaming');
     await tick(800);
     await stream('.answer', 900);
     loadFixture('claude', 'completed');
@@ -312,11 +311,11 @@ describe('detection report (debug only)', () => {
     const json = JSON.stringify(reports[0]);
     expect(json).not.toMatch(/Thinking|Hello|Question|Partial|token|Full answer|Write your prompt|Earlier chat/);
     expect(json).toContain('generation-start');
-    expect(json).toContain('font-claude-response');
+    expect(json).toContain('data-alluvium');
     const msg = parseContentMessage({ v: 1, kind: 'report', platform: 'claude', report: reports[0] });
     expect(msg?.kind).toBe('report');
     const report = reports[0] as { mutations: { act: boolean; d: string }[] };
-    expect(report.mutations.some((m) => m.act && m.d.includes('div.answer'))).toBe(true);
+    expect(report.mutations.some((m) => m.act && m.d.includes('p.answer'))).toBe(true);
   });
 
   it('records nothing while tracing is off', async () => {

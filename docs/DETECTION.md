@@ -14,13 +14,14 @@ Web UIs do not expose a model's internal phases. The detectors therefore report 
 | `user_typing` | `input` events on the prompt composer in the last 4 s. Only the event timestamp is used. |
 | `unknown` | Neither composer nor answer area was recognized for 5 s (layout changed / not a chat page). |
 
-Changes inside interactive or status elements in the answer area — buttons, expanders (`[aria-expanded]`, `summary`), icons (`svg`), `role="status"`/`progressbar`, `aria-busy` — are treated as UI chrome, not as the answer being written. This keeps an animated “Thinking…” or “Searching…” header in the `thinking` state until real answer content appears. Extended-reasoning text that streams into the page as normal content still appears as `responding`.
+Extended reasoning that streams text into the page usually appears as `responding`; a long silent wait appears as `thinking`.
 
 ## Live findings
 
 | Date | Platform | Result |
 | --- | --- | --- |
-| 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking was reported as responding (status header counted as answer) → status-chrome rule added, awaiting re-test. Tool use not detected (no Claude tool rule yet). |
+| 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking not shown. Tool/command use shown as thinking (no Claude tool rule yet). |
+| 2026-11-19 | Claude | A rule ignoring changes inside `aria-busy`/status elements broke responding (Claude marks the streaming message busy) → **reverted**. Detection report verified `div[data-testid=assistant-message][data-is-streaming]`, answer text in `div.prose > div[data-alluvium]` as `span[data-wf]` chunks; the stop button was **not** matched. In the reported request, text started ~50 ms after the request (no visible thinking phase). Next: report from a request with a visible “Thinking…” phase and a tool call. |
 
 ## Detection report
 

@@ -10,14 +10,28 @@
 
 /** Characters allowed in descriptors; everything else is dropped. */
 const DESCRIPTOR_CHARS = /[^\w\-:./[\]%#()="^ >,]/g;
-const MAX_DESCRIPTOR = 400;
+const MAX_DESCRIPTOR = 700;
 const MAX_EVENTS = 3000;
 const MAX_MUTATIONS = 100;
 const MAX_TIMELINE = 120;
 const KEEP_MS = 120_000;
 
 /** Attributes whose values are structural (never user content). */
-const VALUE_ATTRS = ['data-testid', 'data-is-streaming', 'data-state', 'data-type', 'role', 'aria-expanded', 'aria-busy', 'aria-live', 'aria-hidden'];
+const VALUE_ATTRS = [
+  'data-testid',
+  'data-is-streaming',
+  'data-busy',
+  'data-cds-reply-type',
+  'data-transcript-live',
+  'data-state',
+  'data-status',
+  'data-type',
+  'role',
+  'aria-expanded',
+  'aria-busy',
+  'aria-live',
+  'aria-hidden',
+];
 
 export type TraceMutationType = 'child' | 'text' | 'attr';
 
@@ -62,7 +76,7 @@ export function describeNode(el: Element): string {
     if (a.name.startsWith('data-') && !VALUE_ATTRS.includes(a.name) && /^[\w-]{1,40}$/.test(a.name)) s += `[${a.name}]`;
   }
   if (el.matches('[aria-label^="stop" i]')) s += '[aria-label^=stop]';
-  return clean(s, 160);
+  return clean(s, 260);
 }
 
 /** Path from `el` up to (and including) `stopAt`, or at most `depth` levels. */
@@ -101,7 +115,7 @@ export class TraceRecorder {
 
   mutation(at: number, d: string, type: TraceMutationType, act: boolean, add = ''): void {
     if (!this.enabled) return;
-    this.events.push({ at, d, type, act, add: clean(add, 160) });
+    this.events.push({ at, d, type, act, add: clean(add, 260) });
     if (this.events.length > MAX_EVENTS) this.events.splice(0, this.events.length - MAX_EVENTS);
   }
 

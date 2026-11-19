@@ -88,12 +88,8 @@ export const DEFAULT_DETECTOR_TIMING: DetectorTiming = {
 
 const TICK_MS = 250;
 
-/**
- * Interactive and status elements: changes inside them (a "Thinking…" or
- * "Searching…" header, an expander, a spinner icon) are UI chrome, not the
- * answer being written. Purely structural — no text is inspected.
- */
-const STATUS_CHROME = 'button, [role="button"], summary, [aria-expanded], svg, [role="status"], [role="progressbar"], [aria-busy="true"]';
+/** Controls/indicators that the detection report records wherever they appear. */
+const TRACE_CONTROLS = 'button, [role="button"], summary, [aria-expanded], [role="status"], [role="progressbar"]';
 const MUTATION_COALESCE_MS = 60;
 
 /** Raw structural observations at one instant. Exported for tests. */
@@ -355,9 +351,11 @@ export class DomDetector implements AIDetector {
       if (!el) continue;
       const container = closestAny(el, this.profile.response);
       const added = Array.from(r.addedNodes).find((n) => n.nodeType === 1) as Element | undefined;
-      const addedIsControl = added !== undefined && added.matches?.(STATUS_CHROME);
-      // Only the answer area, plus controls appearing anywhere (stop buttons, expanders).
-      if (!container && !addedIsControl) continue;
+      const addedIsControl = added !== undefined && safeMatches(added, TRACE_CONTROLS);
+      // The answer area, controls appearing anywhere, and — while a request
+      // runs — any element added elsewhere (e.g. a separate thinking indicator).
+      const busy = this.t.generating || now - this.t.genStartedAt < 3000;
+      if (!container && !addedIsControl && !(busy && added !== undefined)) continue;
       const type = r.type === 'characterData' ? 'text' : r.type === 'attributes' ? 'attr' : 'child';
       const addDesc = added ? describeNode(added) : r.addedNodes.length > 0 ? '#text' : '';
       this.trace.mutation(now, describePath(el, container, 7), type, act, addDesc);
@@ -377,14 +375,12 @@ export class DomDetector implements AIDetector {
     if (!closestAny(el, this.profile.response)) return false;
     const ignore = [...this.profile.thinking, ...this.profile.tool, ...this.profile.generating, ...this.profile.composer];
     if (closestAny(el, ignore)) return false;
-    if (safeClosest(el, STATUS_CHROME)) return false;
     if (r.type === 'characterData') return true;
     // childList: count only when something other than a status marker was added.
     for (const added of Array.from(r.addedNodes)) {
       if (added.nodeType === 3) return true;
       if (added.nodeType === 1) {
         const ae = added as Element;
-        if (safeMatches(ae, STATUS_CHROME)) continue;
         const isMarker = ignore.some((s) => {
           try {
             return ae.matches(s) || ae.querySelector(s) !== null;

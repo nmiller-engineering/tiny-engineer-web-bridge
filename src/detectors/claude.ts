@@ -20,7 +20,9 @@ export const claudeProfile: PlatformProfile = {
   // tool activity is reported as `thinking`/`responding` (see docs/DETECTION.md).
   tool: [],
   error: ['[data-testid="message-error"]'],
-  response: ['[data-is-streaming]', '.font-claude-response', '.font-claude-message'],
+  // Verified via a live detection report (2026-11-19):
+  // div[data-testid=assistant-message][data-is-streaming=true|false] > … > div.prose > div[data-alluvium] > p/ul/table
+  response: ['[data-testid="assistant-message"]', '[data-is-streaming]', '.font-claude-response', '.font-claude-message'],
 };
 
 export function createClaudeDetector(opts?: DomDetectorOptions): DomDetector {

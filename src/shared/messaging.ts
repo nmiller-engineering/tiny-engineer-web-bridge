@@ -94,7 +94,7 @@ function parseReport(raw: unknown): DetectionReport | null {
   for (const x of r.mutations) {
     const m = x as Record<string, unknown>;
     if (typeof m !== 'object' || m === null) return null;
-    if (!reportString(m.d, 400) || !reportString(m.add, 160) || typeof m.act !== 'boolean') return null;
+    if (!reportString(m.d, 700) || !reportString(m.add, 260) || typeof m.act !== 'boolean') return null;
     if (m.type !== 'child' && m.type !== 'text' && m.type !== 'attr') return null;
     if (!finite(m.n) || !finite(m.first) || !finite(m.last)) return null;
     mutations.push({ d: m.d, type: m.type, act: m.act, add: m.add, n: m.n, first: m.first, last: m.last });
