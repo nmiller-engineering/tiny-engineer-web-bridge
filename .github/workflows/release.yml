@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag like v1.0.0 (must match package.json "version").
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Tag matches package.json version
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+
+      - name: Lint, test, Firefox lint, package, source archive
+        env:
+          SOURCE_DATE_EPOCH: 315532800
+        run: npm run release:check
+
+      # Optional: Mozilla signing (unlisted = self-distributed, not published on AMO).
+      # Add repository secrets AMO_JWT_ISSUER and AMO_JWT_SECRET to enable.
+      - name: Sign with Mozilla (unlisted)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        if: env.AMO_JWT_ISSUER != '' && env.AMO_JWT_SECRET != ''
+        run: |
+          mkdir -p signed
+          npx web-ext sign --source-dir dist --channel unlisted \
+            --upload-source-code "web-ext-artifacts/tiny-engineer-web-bridge-${GITHUB_REF_NAME#v}-source.zip" \
+            --artifacts-dir signed --api-key "$AMO_JWT_ISSUER" --api-secret "$AMO_JWT_SECRET"
+          for f in signed/*.xpi; do mv "$f" "web-ext-artifacts/tiny-engineer-web-bridge-${GITHUB_REF_NAME#v}-signed.xpi"; done
+
+      - name: Checksums
+        run: cd web-ext-artifacts && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Release notes from CHANGELOG
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+          test -s notes.md || echo "See CHANGELOG.md" > notes.md
+
+      - uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          body_path: notes.md
+          files: web-ext-artifacts/*
+          fail_on_unmatched_files: true

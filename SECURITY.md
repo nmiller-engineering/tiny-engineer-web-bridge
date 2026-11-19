@@ -1,0 +1,78 @@
+# Security & privacy architecture
+
+## Threat model
+
+| Actor | Can | Must not be able to |
+| --- | --- | --- |
+| AI website (page scripts, page content) | change its DOM, dispatch events | read config/token, make the extension contact arbitrary hosts, send arbitrary commands, exfiltrate data |
+| Other websites | nothing (no content scripts there) | – |
+| Local network attacker | sniff/spoof plain HTTP to the robot | – (inherent firmware limitation, see below) |
+| Anyone with access to the Firefox profile | read extension storage | – (storage is not encrypted) |
+
+## Trust boundaries
+
+1. **Content scripts are untrusted.** They run inside AI pages and are compiled from `src/content` + `src/detectors` only. Lint rules and `tests/architecture.test.ts` ensure these bundles contain no config, storage, device client, `fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon` or `navigator.serial`. Page text is read in exactly one module, `src/detectors/labels.ts` (enforced per source file by a test): short status headers (≤ 80 characters) are classified into `thinking`/`tool`/`other`, and the prompt box is checked for emptiness (boolean). Its exported functions return only categories/booleans (also enforced by a test); no text leaves the module.
+2. **Messages are validated** (`parseContentMessage`): exact key set, protocol version, enumerated platform/state/signal names, bounded confidence and sequence numbers. A content script cannot name a URL, method, header, body or animation — the background maps states to animations itself.
+3. **Sender checks:** only top-frame tab senders of this extension; the sender's origin must equal the platform's expected origin (`https://chatgpt.com`, `https://claude.ai`, or the exact configured Open WebUI origin including port). Privileged requests (`getStatus`, `testConnection`, `testAnimation`, debug log) are only accepted from this extension's own pages.
+4. **The device clients** can reach only the configured robot and only the documented endpoints/ops. Animation names come from a fixed allowlist.
+
+## Network security (Wi-Fi)
+
+- The firmware speaks plain HTTP; **traffic and the Bearer token are not encrypted** on your LAN. Use a trusted network; consider a dedicated IoT VLAN.
+- Host validation: IPv4 or DNS hostname only; scheme, port, path, query, fragment, credentials (`user@`), IPv6 literals, `0.x`, multicast and broadcast are rejected. The URL is rebuilt and re-checked before every request.
+- The token is sent only in `Authorization: Bearer …`, never in the URL, never to the public `/auth` endpoint, never logged. Tokens follow the firmware rule — 0–64 printable ASCII characters, no leading/trailing space — so CR/LF header injection is impossible.
+- Requests use `redirect: 'manual'` (redirects are reported, not followed — the firmware redirects to its setup AP in provisioning mode), `credentials: 'omit'`, `referrerPolicy: 'no-referrer'`, `cache: 'no-store'`, a timeout, and a 16 KiB response limit. Only known JSON fields are read.
+- Firefox host permission for the robot is requested explicitly (`optional_host_permissions`) for the single host the user entered; an old robot host permission is removed when the address changes. `optional_host_permissions` lists `http://*/*` and `https://*/*` only so that a user-entered host *can be requested*; the extension never requests the wildcard itself.
+- The extension pages' CSP omits Firefox's default `upgrade-insecure-requests` (it would break plain-HTTP robot access) and otherwise allows only `'self'` resources: `default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src http:; object-src 'none'; base-uri 'none'; form-action 'none'`. `connect-src http:` cannot name the user's host statically; the device client enforces the destination.
+
+## USB / Web Serial
+
+- **Firefox:** disabled — Firefox does not grant Web Serial to extensions.
+- **Chrome:** the service worker has no Web Serial; a dedicated extension page (`usb/index.html`) owns the port. It accepts device requests only from this extension's service worker (sender id and URL checked, no tab), only the operations `auth`/`health`/`anim-get`/`anim` with an allowlisted animation, and only while it holds a Web Lock (one active tab). The worker validates the page's answers (error kinds allowlisted, strings length-limited).
+
+- The port is selected by the user via `navigator.serial.requestPort()` on the options page; the background only uses already granted ports (`getPorts()`) and never prompts.
+- Only `sync`, `health` and `anim` (allowlisted name) are sent; log/event/stream frames from the device are ignored; frames are size-bounded and malformed frames are dropped.
+- The serial protocol has no authentication: anyone with physical access can control the robot.
+
+## Permissions
+
+| Permission | Why |
+| --- | --- |
+| `storage` | settings (`local`), runtime state across suspension (`session`) |
+| `scripting` | register detectors only for enabled platforms; inject into tabs already open |
+| `alarms` | watchdog so the robot never stays busy after a lost signal while the background is suspended |
+| host `https://chatgpt.com/*`, `https://claude.ai/*` | run the detectors there |
+| optional host (requested per host) | the robot's address; the Open WebUI origin |
+
+No `tabs`, `<all_urls>`, `webRequest`, `cookies`, `history` or `clipboard` permissions. No `fetch` monkey-patching and no response-body interception.
+
+## Data handling
+
+- No telemetry, analytics, remote logging, or remote code. All scripts are bundled; the manifest declares `data_collection_permissions: none`.
+- Prompts, answers, passwords, cookies, AI session tokens and auth headers are never read or collected. (Exception, in memory only: short status headers and the prompt box's empty/non-empty state — see trust boundary 1.)
+- Settings are stored in `browser.storage.local` of the Firefox profile — **not encrypted** — and never in `storage.sync`.
+- Residual risk: Firefox makes `storage.local` available to *all* of an extension's contexts, including its own content scripts. Our content-script code never touches storage (enforced by lint + bundle tests), and page JavaScript cannot reach the content script's `browser` object (Xray isolation). A bug that allowed code execution *inside* our content script could, however, read the token. Keep the robot token unique (do not reuse a password).
+- The debug log is off by default, in memory only, capped, and contains only states, platform names, tab ids, animation names and error categories. Tab titles/URLs are not stored.
+
+## Optional advanced (network) detection
+
+Observing network-request metadata (`webRequest`) was considered. It would require broad host permissions and request-level access to AI sites, and DOM signals already provide the needed transitions. It is **not implemented**; no request bodies are intercepted and `fetch` is not patched.
+
+## Review log
+
+**2026-11-18 internal review** (code + build artifacts). Fixed:
+- USB: if a specific device had been chosen but was absent, the client fell back to any single granted serial port and would have sent protocol frames to an unrelated device. Now it refuses (`no-permission`).
+- Detectors no longer read the `aria-label` of arbitrary buttons (sidebar labels can contain chat titles); only controls whose label starts with “stop” are inspected, selected by the CSS engine.
+- Strings from the robot (firmware version, animation name) are length-limited before reaching UI and session storage.
+- State restored from `storage.session` after a background restart is validated record by record.
+- Disabling Open WebUI now revokes the site permission for its origin.
+
+Verified: no `innerHTML`/`eval`/`new Function`/`document.write` in shipped code; no runtime dependencies (`npm audit --omit=dev`: 0); no `web_accessible_resources` or `externally_connectable`; content-script bundles contain no network, serial or storage APIs; privileged requests accepted only from the extension's own pages; content messages bound to the sender's origin.
+
+Open recommendations: development-only advisory in `picomatch` (build tooling, not shipped); live verification in Firefox (CSP without `upgrade-insecure-requests`, Web Serial availability) is still pending.
+
+Release hardening (v1.0.0): GitHub Actions pinned to commit SHAs, checkout without persisted credentials, least-privilege workflow permissions, reproducible XPI and source archives with published SHA-256 checksums.
+
+## Reporting a vulnerability
+
+Please open a GitHub security advisory (private) on this repository rather than a public issue.

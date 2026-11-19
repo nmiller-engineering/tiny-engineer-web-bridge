@@ -1,0 +1,23 @@
+body { width: 340px; background: var(--surface); }
+.top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.brand { flex: 1; line-height: 1.2; }
+.brand h1 { font-size: 15px; }
+main { display: grid; gap: 10px; padding: 12px 14px; }
+.status-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card { padding: 12px 14px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); display: grid; gap: 8px; }
+.card h2 { font-size: 14px; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.state { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.state .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 0%, transparent); }
+.state[data-state="idle"] .dot, .state[data-state="unknown"] .dot { background: var(--border-strong); }
+.state[data-state="user_typing"] .dot { background: var(--info); }
+.state[data-state="thinking"] .dot { background: var(--info); animation: pulse 1.4s ease-in-out infinite; }
+.state[data-state="responding"] .dot { background: var(--accent); animation: pulse 0.9s ease-in-out infinite; }
+.state[data-state="tool_use"] .dot { background: var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+.state[data-state="completed"] .dot { background: var(--ok); }
+.state[data-state="error"] .dot { background: var(--bad); }
+.source { color: var(--fg-2); font-size: 13px; }
+.robot-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px dashed var(--border-strong); font-size: 13px; }
+.actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 14px 14px; }
+.actions.single { grid-template-columns: 1fr; justify-items: end; }
+body.off .activity { opacity: 0.5; }

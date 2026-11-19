@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiny Engineer Web Bridge</title>
+    <link rel="stylesheet" href="../shared/ui.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="top">
+      <img src="../icons/icon.svg" alt="" width="28" height="28" />
+      <div class="brand">
+        <h1>Tiny Engineer</h1>
+        <p class="muted small">Web Bridge</p>
+      </div>
+      <label class="switch" title="Pause or resume the bridge">
+        <input type="checkbox" id="enabled" aria-label="Bridge enabled" />
+        <span class="track" aria-hidden="true"></span>
+      </label>
+    </header>
+
+    <main>
+      <div class="status-row">
+        <span class="pill" id="connection" data-tone="warn">Checking…</span>
+        <span class="muted small" id="link"></span>
+      </div>
+
+      <!-- Shown until a robot is configured -->
+      <section class="card welcome" id="welcome" hidden>
+        <h2>Connect your robot</h2>
+        <p class="muted">Enter your Tiny Engineer's address (or pick it over USB) to let it react to ChatGPT, Claude and Open WebUI.</p>
+        <button type="button" class="btn block" id="setup">Set up robot</button>
+      </section>
+
+      <!-- Shown while paused -->
+      <section class="card paused" id="paused" hidden>
+        <h2>Bridge paused</h2>
+        <p class="muted">The robot is at rest and no commands are sent. Use the switch above to resume.</p>
+      </section>
+
+      <section class="card activity" id="activity" aria-live="polite">
+        <p class="eyebrow">AI activity</p>
+        <div class="state" id="state" data-state="idle">
+          <span class="dot" aria-hidden="true"></span>
+          <span id="state-label">Idle</span>
+        </div>
+        <p class="source" id="source">No supported AI tab open</p>
+        <div class="robot-line">
+          <span class="muted">Robot</span>
+          <span class="anim" id="robot-animation">–</span>
+          <span class="muted small" id="last-sent"></span>
+        </div>
+      </section>
+
+      <p class="notice" id="notice" data-tone="warn" hidden></p>
+      <p class="notice" id="result" data-tone="ok" role="status" hidden></p>
+    </main>
+
+    <footer class="actions">
+      <button type="button" class="btn secondary" id="test">Test connection</button>
+      <button type="button" class="btn ghost" id="settings">Settings</button>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

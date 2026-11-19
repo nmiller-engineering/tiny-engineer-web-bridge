@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tiny Engineer Web Bridge – Settings</title>
+    <link rel="stylesheet" href="../shared/ui.css" />
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <img src="../icons/icon.svg" alt="" width="36" height="36" />
+        <div class="brand">
+          <h1>Tiny Engineer Web Bridge</h1>
+          <p class="muted small">Your AI's activity, acted out by your desk robot · <span id="version"></span></p>
+        </div>
+        <span class="pill" id="connection" data-tone="info">Checking…</span>
+        <label class="switch big" title="Pause or resume the bridge">
+          <input type="checkbox" id="enabled" aria-label="Bridge enabled" />
+          <span class="track" aria-hidden="true"></span>
+        </label>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc" aria-label="Sections">
+        <a href="#s-connection">Robot connection</a>
+        <a href="#s-platforms">AI platforms</a>
+        <a href="#s-animations">Animations</a>
+        <a href="#s-behaviour">Behaviour</a>
+        <a href="#s-diagnostics">Diagnostics</a>
+        <a href="#s-about">About &amp; privacy</a>
+      </nav>
+
+      <main>
+        <section class="card start" id="getting-started" hidden>
+          <h2>Welcome! Three steps to get going</h2>
+          <ol class="steps">
+            <li><strong>Connect the robot</strong> — enter its IP address (shown on its display) or pick it over USB.</li>
+            <li><strong>Allow access</strong> — your browser asks once whether the extension may talk to that address.</li>
+            <li><strong>Open ChatGPT, Claude or Open WebUI</strong> and send a prompt. The robot thinks, types and rings when it's done.</li>
+          </ol>
+        </section>
+
+        <!-- Connection ----------------------------------------------------- -->
+        <section class="card" id="s-connection" aria-labelledby="h-connection">
+          <div class="card-head">
+            <div>
+              <h2 id="h-connection">Robot connection</h2>
+              <p class="muted">How the extension reaches your Tiny Engineer.</p>
+            </div>
+            <div class="seg" role="radiogroup" aria-label="Connection type">
+              <label><input type="radio" name="transport" value="http" /><span>Wi-Fi</span></label>
+              <label id="usb-option"><input type="radio" name="transport" value="serial" /><span>USB</span></label>
+            </div>
+          </div>
+
+          <p class="notice" data-tone="info" id="usb-firefox" hidden>
+            USB isn't available in Firefox: Firefox only grants Web Serial to websites (through a site-permission
+            add-on), not to extensions. Use Wi-Fi — or the Chrome version of this extension, which supports USB.
+          </p>
+
+          <form id="device-form" class="stack" novalidate>
+            <div class="grid-3">
+              <label class="field span-2">
+                <span class="label">IP address or hostname</span>
+                <input class="input" id="host" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="192.168.1.50" required />
+                <span class="hint">Shown on the robot's display. <code>tiny-engineer.local</code> also works on 2.4 GHz networks.</span>
+              </label>
+              <label class="field">
+                <span class="label">Port</span>
+                <input class="input" id="port" type="number" min="1" max="65535" value="80" required />
+              </label>
+            </div>
+            <label class="field">
+              <span class="label">Access token <span class="muted">· optional</span></span>
+              <span class="input-group">
+                <input class="input" id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Only if you set one on the robot" />
+                <button type="button" class="btn secondary" id="toggle-token" aria-pressed="false">Show</button>
+              </span>
+            </label>
+            <p class="error-text" id="device-error" role="alert"></p>
+            <div class="row">
+              <button type="submit" class="btn" id="save-device">Save &amp; allow access</button>
+              <button type="button" class="btn secondary" id="test-connection">Test connection</button>
+            </div>
+            <p class="muted small">Wi-Fi traffic to the robot is plain HTTP and not encrypted; the token is stored unencrypted in this browser profile.</p>
+          </form>
+
+          <div id="serial-section" class="stack" hidden>
+            <p class="notice" data-tone="warn" id="serial-unavailable" hidden>
+              Web Serial isn't available in this browser, so USB can't be used here. Please use Wi-Fi.
+            </p>
+            <p class="muted">Plug the robot in by USB and choose its serial port. Close other programs that use the port first
+              (e.g. <code>tiny-engineer daemon release</code>). USB has no token — physical access is enough to control the robot.</p>
+            <div class="row">
+              <button type="button" class="btn" id="choose-serial">Choose USB device</button>
+              <button type="button" class="btn secondary" id="open-usb-tab" hidden>Open USB tab</button>
+              <button type="button" class="btn secondary" id="test-serial">Test connection</button>
+            </div>
+            <p class="muted small" id="usb-tab-hint" hidden>Chrome keeps the USB connection in a separate tab. It opens automatically after you choose a device — keep it open (pinning it is easiest).</p>
+            <label class="inline-check"><input type="checkbox" id="serial-all" /> Show all serial devices, not only Espressif boards</label>
+            <p class="muted small">Selected device: <span id="serial-device">none</span></p>
+            <p class="error-text" id="serial-error" role="alert"></p>
+            <p class="muted small" id="serial-diag"></p>
+          </div>
+
+          <div class="setting-row">
+            <div>
+              <p class="setting-title">Reconnect automatically</p>
+              <p class="muted small">Retry in the background when the robot was unreachable.</p>
+            </div>
+            <label class="switch"><input type="checkbox" id="auto-reconnect" aria-label="Reconnect automatically" /><span class="track" aria-hidden="true"></span></label>
+          </div>
+
+          <dl class="facts">
+            <div><dt>Status</dt><dd id="connection-detail">–</dd></div>
+            <div><dt>Firmware</dt><dd id="firmware">–</dd></div>
+            <div><dt>Token required</dt><dd id="auth-required">–</dd></div>
+            <div><dt>Robot shows</dt><dd id="robot-animation">–</dd></div>
+            <div><dt>Last sent</dt><dd id="last-sent">–</dd></div>
+          </dl>
+        </section>
+
+        <!-- Platforms ------------------------------------------------------ -->
+        <section class="card" id="s-platforms" aria-labelledby="h-platforms">
+          <div class="card-head">
+            <div>
+              <h2 id="h-platforms">AI platforms</h2>
+              <p class="muted">The robot reacts only on platforms you switch on. Your prompts and the answers are never read — only page structure and short status labels like “Thinking…”.</p>
+            </div>
+          </div>
+          <ul class="platforms">
+            <li class="setting-row">
+              <div class="pf"><span class="pf-logo" data-pf="chatgpt" aria-hidden="true">G</span>
+                <div><p class="setting-title">ChatGPT</p><p class="muted small">chatgpt.com</p></div></div>
+              <span class="perm" id="perm-chatgpt"></span>
+              <label class="switch"><input type="checkbox" id="pf-chatgpt" aria-label="ChatGPT" /><span class="track" aria-hidden="true"></span></label>
+            </li>
+            <li class="setting-row">
+              <div class="pf"><span class="pf-logo" data-pf="claude" aria-hidden="true">C</span>
+                <div><p class="setting-title">Claude</p><p class="muted small">claude.ai</p></div></div>
+              <span class="perm" id="perm-claude"></span>
+              <label class="switch"><input type="checkbox" id="pf-claude" aria-label="Claude" /><span class="track" aria-hidden="true"></span></label>
+            </li>
+            <li class="setting-row wrap">
+              <div class="pf"><span class="pf-logo" data-pf="openwebui" aria-hidden="true">O</span>
+                <div><p class="setting-title">Open WebUI</p><p class="muted small">Your self-hosted instance, at any address</p></div></div>
+              <span class="perm" id="perm-openwebui"></span>
+              <label class="switch"><input type="checkbox" id="pf-openwebui" aria-label="Open WebUI" /><span class="track" aria-hidden="true"></span></label>
+              <div class="input-group full">
+                <input class="input" id="openwebui-origin" type="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.20:3000" aria-label="Open WebUI address" />
+                <button type="button" class="btn secondary" id="save-openwebui">Save &amp; allow access</button>
+              </div>
+              <p class="error-text full" id="openwebui-error" role="alert"></p>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Animations ----------------------------------------------------- -->
+        <section class="card" id="s-animations" aria-labelledby="h-animations">
+          <div class="card-head">
+            <div>
+              <h2 id="h-animations">Animations</h2>
+              <p class="muted">What the robot does in each situation. “Do nothing” leaves it as it is.</p>
+            </div>
+            <button type="button" class="btn ghost sm" id="reset-mapping">Restore defaults</button>
+          </div>
+          <div class="mapping" id="mapping-body"></div>
+        </section>
+
+        <!-- Behaviour ------------------------------------------------------ -->
+        <section class="card" id="s-behaviour" aria-labelledby="h-behaviour">
+          <div class="card-head">
+            <div>
+              <h2 id="h-behaviour">Behaviour</h2>
+              <p class="muted">Which tab is in charge, and how quickly the robot reacts.</p>
+            </div>
+          </div>
+          <fieldset class="choice-cards">
+            <legend class="sr-only">With several AI tabs open</legend>
+            <label class="choice">
+              <input type="radio" name="arbitration" value="active-tab" />
+              <span><strong>Active tab</strong><span class="muted small">The AI tab you used last controls the robot.</span></span>
+            </label>
+            <label class="choice">
+              <input type="radio" name="arbitration" value="activity-priority" />
+              <span><strong>Busy tab first</strong><span class="muted small">A tab that is generating may control the robot, even in the background.</span></span>
+            </label>
+          </fieldset>
+          <details class="advanced">
+            <summary>Timing <span class="muted small">— advanced</span></summary>
+            <div class="grid-2" id="timing"></div>
+            <button type="button" class="btn ghost sm" id="reset-timing">Reset timing to defaults</button>
+          </details>
+        </section>
+
+        <!-- Diagnostics ---------------------------------------------------- -->
+        <section class="card" id="s-diagnostics" aria-labelledby="h-diag">
+          <div class="card-head">
+            <div>
+              <h2 id="h-diag">Diagnostics</h2>
+              <p class="muted">What the extension currently detects. Useful when a website changed its layout.</p>
+            </div>
+          </div>
+          <dl class="facts">
+            <div><dt>In control</dt><dd id="diag-controller">–</dd></div>
+            <div><dt>Last command</dt><dd id="diag-command">–</dd></div>
+            <div><dt>Last error</dt><dd id="diag-error">–</dd></div>
+          </dl>
+          <div class="table-wrap">
+            <table class="tabs">
+              <thead><tr><th>Tab</th><th>Platform</th><th>Detected</th><th>Effective</th><th>Confidence</th><th>Signals</th><th>Updated</th></tr></thead>
+              <tbody id="diag-tabs"></tbody>
+            </table>
+          </div>
+          <div class="setting-row">
+            <div>
+              <p class="setting-title">Debug log</p>
+              <p class="muted small">Kept in memory only. Never contains conversation text or tokens.</p>
+            </div>
+            <label class="switch"><input type="checkbox" id="debug" aria-label="Debug log" /><span class="track" aria-hidden="true"></span></label>
+          </div>
+          <div class="row">
+            <button type="button" class="btn secondary sm" id="refresh-log">Show log</button>
+            <button type="button" class="btn secondary sm" id="copy-report">Copy detection report</button>
+            <button type="button" class="btn ghost sm" id="clear-log">Clear</button>
+          </div>
+          <p class="muted small">The detection report lists which page elements changed during your last AI request —
+            tag names, CSS classes and a few attributes only, never text. Send it along when a website isn't detected correctly.</p>
+          <pre id="log" hidden></pre>
+        </section>
+
+        <!-- About ---------------------------------------------------------- -->
+        <section class="card about" id="s-about" aria-labelledby="h-about">
+          <h2 id="h-about">About &amp; privacy</h2>
+          <ul class="checks">
+            <li>Runs entirely on your computer — no servers, accounts, analytics or telemetry.</li>
+            <li>Reads only the structure of AI pages (buttons, markers), never your conversations.</li>
+            <li>Talks only to your robot, on its documented control endpoints.</li>
+          </ul>
+          <p class="muted small">
+            Open source under the MIT license ·
+            <a href="https://github.com/nmiller-engineering/tiny-engineer-web-bridge" target="_blank" rel="noopener noreferrer">Source code</a> ·
+            <a href="https://github.com/nmiller-engineering/tiny-engineer-web-bridge/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy policy</a> ·
+            Tiny Engineer by <a href="https://github.com/jamro/tiny-engineer" target="_blank" rel="noopener noreferrer">jamro</a>
+          </p>
+        </section>
+      </main>
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>

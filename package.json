@@ -1,0 +1,43 @@
+{
+  "name": "tiny-engineer-web-bridge",
+  "version": "1.0.0",
+  "description": "Firefox extension that mirrors ChatGPT, Claude and Open WebUI activity as Tiny Engineer robot animations.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "node scripts/build.mjs --watch",
+    "dev:chrome": "node scripts/build.mjs --target=chrome --watch",
+    "start:firefox": "web-ext run --source-dir dist --browser-console",
+    "build": "node scripts/build.mjs",
+    "build:chrome": "node scripts/build.mjs --target=chrome",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build:chrome && node tests-e2e/chrome.e2e.mjs",
+    "lint": "eslint . && tsc --noEmit",
+    "lint:firefox": "npm run build && web-ext lint --source-dir dist",
+    "package": "npm run build && node scripts/package.mjs",
+    "package:chrome": "npm run build:chrome && node scripts/package.mjs --target=chrome",
+    "package:source": "node scripts/package-source.mjs",
+    "release:check": "npm run lint && npm test && npm run lint:firefox && npm run package && npm run package:chrome && npm run package:source",
+    "mock-robot": "node tools/mock-tiny-engineer.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/firefox-webext-browser": "^143.0.1",
+    "@types/node": "^24.19.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "jsdom": "^31.0.1",
+    "playwright": "^1.63.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^5.1.1",
+    "web-ext": "^10.8.0"
+  }
+}
