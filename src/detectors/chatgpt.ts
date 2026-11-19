@@ -11,9 +11,13 @@ import { DomDetector, type DomDetectorOptions, type PlatformProfile } from './ba
 export const chatgptProfile: PlatformProfile = {
   platform: 'chatgpt',
   composer: ['#prompt-textarea', '[data-testid="prompt-textarea"]', 'form [contenteditable="true"]', 'form textarea'],
-  stopButtons: ['button[data-testid="stop-button"]'],
-  // English UI fallback. Deliberately not a bare "Stop": read-aloud uses that.
-  stopLabels: [{ scope: null, pattern: /^stop (streaming|generating)$/i }],
+  stopButtons: ['button[data-testid="stop-button"]', 'form button[data-testid*="stop" i]'],
+  // Inside the prompt form any "Stop…" label is the stop control; elsewhere
+  // only explicit wording (read-aloud also uses a bare "Stop").
+  stopLabels: [
+    { scope: 'form', pattern: /^stop\b/i },
+    { scope: null, pattern: /^stop (streaming|generating|answering|response)$/i },
+  ],
   generating: [],
   streaming: ['[data-message-author-role="assistant"] .result-streaming', '.result-streaming'],
   thinking: [],
@@ -21,7 +25,7 @@ export const chatgptProfile: PlatformProfile = {
   // tool activity is reported as `thinking` (see docs/DETECTION.md).
   tool: [],
   error: ['[data-testid="error-message"]', '.text-token-text-error'],
-  response: ['[data-message-author-role="assistant"]'],
+  response: ['[data-message-author-role="assistant"]', 'article[data-turn="assistant"]'],
   userMessage: ['[data-message-author-role="user"]'],
   sendButtons: ['button[data-testid="send-button"]', 'button[aria-label^="send" i]'],
 };

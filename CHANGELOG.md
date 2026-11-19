@@ -13,6 +13,7 @@ First public release.
 - Configurable animation for each state with one-click test, plus “Do nothing”.
 - Central state machine with debouncing, duplicate suppression, last-state-wins queue, reconnect back-off, keepalive for long answers and a lost-signal fallback.
 - Multi-tab handling: *Active tab* or *Busy tab first*.
+- **Robust fallback:** if a site's busy markers change, answer growth after sending still drives `responding`/`completed`; broader ChatGPT stop-button rules.
 - **Agent runs:** “completed” only when the whole task is finished — pauses between steps (up to 2 s, configurable) and Claude's turn-level busy markers keep the task running.
 - **Fast, layered detection:** pressing Enter/send starts `thinking` immediately (before the answer exists); the active answer block distinguishes text, thinking and tool blocks (short status headers, English + German); faster defaults (debounce 150 ms, stability 250 ms, command spacing 250 ms).
 - Optional **detection report** (debug mode): a structural, text-free trace of what changed during a request, to fix detection after website changes.

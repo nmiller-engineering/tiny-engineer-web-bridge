@@ -21,6 +21,8 @@ Extended reasoning that streams text into the page usually appears as `respondin
 | Date | Platform | Result |
 | --- | --- | --- |
 | 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking not shown. Tool/command use shown as thinking (no Claude tool rule yet). |
+| 2026-11-19 | ChatGPT | “thinking sometimes, typing never”: generation was never recognised (stop button / `.result-streaming` rules outdated), so only the submit layer worked. Added broader stop rules inside the prompt form and the answer-growth fallback; detection reports now also cover submits without a recognised generation. Awaiting re-test + report. |
+| 2026-11-19 | Claude | Works well (thinking, tool use, responding, agent runs) after the layered design. |
 | 2026-11-19 | Claude | Agent runs rang “completed” after each step (streaming pauses during tool execution > 0.7 s end grace). Now: 2 s task-end wait + turn-level busy markers. |
 | 2026-11-19 | Claude | Root cause of unreliable initial thinking: before the answer element exists, no signal was visible (stop button not matched). New layer: submit detection (Enter/send) → thinking immediately; block model for thinking/tool blocks. Real-Chromium test: Enter → robot `thinking` in ~330 ms. Awaiting live verification on claude.ai. |
 | 2026-11-19 | Claude | A rule ignoring changes inside `aria-busy`/status elements broke responding (Claude marks the streaming message busy) → **reverted**. Detection report verified `div[data-testid=assistant-message][data-is-streaming]`, answer text in `div.prose > div[data-alluvium]` as `span[data-wf]` chunks; the stop button was **not** matched. In the reported request, text started ~50 ms after the request (no visible thinking phase). Next: report from a request with a visible “Thinking…” phase and a tool call. |
@@ -35,7 +37,8 @@ With **Debug log** on, the extension records a structural trace of each request:
 2. **Lifecycle** — stop control / streaming / busy markers start a generation. It **ends only after 2 s without any busy signal** (configurable: *Wait before “completed”*), so pauses between the steps of an agent run (tool execution) keep the task running and show `thinking` instead of `completed`. On Claude, turn-level busy markers on the message (`data-busy`, `data-transcript-live`; seen live, removed when the reply is finished) keep longer tool steps running; that they persist across agent steps is assumed.
 3. **Active answer block** (profiles with a block model; Claude) — the last block of the streaming answer decides:
    text block (`.prose`) → `responding` while it grows, `thinking` during pauses; non-text block → its short status header is classified: thinking vocabulary → `thinking`, tool vocabulary → `tool_use`, unknown → `thinking` (never “responding”).
-4. **Answer activity** — fallback for platforms without a block model: DOM growth in the answer area → `responding`, otherwise `thinking`.
+4. **Answer activity** — for platforms without a block model: DOM growth in the **latest** answer → `responding`, otherwise `thinking` (re-renders of older answers never count).
+5. **Answer-growth fallback** — if a platform's busy markers are unknown or changed, growth of the latest answer after a submit starts the generation by itself; it ends after the activity window (2.5 s) plus the task-end wait without growth. During that final wait the state stays `responding` (no `thinking` flash before `completed`).
 
 Pipeline latency with defaults (debounce 150 ms, stable 250 ms, command spacing 250 ms): Enter → robot command ≈ 0.3–0.5 s. Measured in real Chromium by `npm run test:e2e`: ~330 ms (with 150 ms stability).
 
@@ -58,9 +61,10 @@ Labels longer than 80 characters are ignored. Extend the lists when a platform p
 | Purpose | Selector(s) |
 | --- | --- |
 | composer | `#prompt-textarea`, `[data-testid="prompt-textarea"]`, `form [contenteditable="true"]`, `form textarea` |
-| stop | `button[data-testid="stop-button"]`; English fallback aria-label `Stop streaming` / `Stop generating` (bare “Stop” is excluded — read-aloud uses it) |
+| stop | `button[data-testid="stop-button"]`, `form button[data-testid*="stop"]`; label starting with “Stop” **inside the prompt form**; elsewhere only `Stop streaming/generating/answering/response` (read-aloud uses a bare “Stop” outside the form) |
 | streaming | `.result-streaming` |
-| answer area | `[data-message-author-role="assistant"]` |
+| answer area | `[data-message-author-role="assistant"]`, `article[data-turn="assistant"]` |
+| user messages / send | `[data-message-author-role="user"]`, `button[data-testid="send-button"]` |
 | error | `[data-testid="error-message"]`, `.text-token-text-error` |
 | tool | none known |
 

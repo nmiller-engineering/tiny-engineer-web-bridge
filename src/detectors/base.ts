@@ -150,6 +150,10 @@ interface Tracker {
   userMsgBaseline: number;
   /** Category of the active answer block (for tracing changes). */
   lastBlock: string;
+  /** Generation was started by answer growth (no platform busy marker seen). */
+  activityMode: boolean;
+  /** Start of the current detection-report window (submit or generation start). */
+  traceFrom: number;
 }
 
 /** Visible enough to count: connected, not hidden by attribute or inline/computed style. */
@@ -287,6 +291,8 @@ export class DomDetector implements AIDetector {
       submitAt: Number.NEGATIVE_INFINITY,
       userMsgBaseline: 0,
       lastBlock: '',
+      activityMode: false,
+      traceFrom: Number.NEGATIVE_INFINITY,
     };
   }
 
@@ -362,6 +368,7 @@ export class DomDetector implements AIDetector {
   private markSubmit(): void {
     this.t.submitAt = this.now();
     this.t.userMsgBaseline = countAll(this.doc, this.profile.userMessage ?? []);
+    if (!this.t.generating) this.t.traceFrom = this.t.submitAt;
     this.trace.mark(this.t.submitAt, 'submit');
     this.scheduleEvaluate(0);
   }
@@ -413,8 +420,22 @@ export class DomDetector implements AIDetector {
     );
   }
 
+  /** The latest answer element per response selector (older answers re-rendering is not activity). */
+  private latestResponses: Set<Element> = new Set();
+
+  private refreshLatestResponses(): void {
+    const latest = new Set<Element>();
+    for (const s of this.profile.response) {
+      const all = safeQueryAll(this.doc, s);
+      const last = all[all.length - 1];
+      if (last) latest.add(last);
+    }
+    this.latestResponses = latest;
+  }
+
   private handleMutations(records: MutationRecord[]): void {
     const now = this.now();
+    this.refreshLatestResponses();
     if (this.trace.enabled) {
       this.traceMutations(records, now);
     } else if (now - this.t.lastResponseActivityAt > 100) {
@@ -440,8 +461,10 @@ export class DomDetector implements AIDetector {
       const addedIsControl = added !== undefined && safeMatches(added, TRACE_CONTROLS);
       // The answer area, controls appearing anywhere, and — while a request
       // runs — any element added elsewhere (e.g. a separate thinking indicator).
-      const busy = this.t.generating || now - this.t.genStartedAt < 3000;
-      if (!container && !addedIsControl && !(busy && added !== undefined)) continue;
+      const busy = this.t.generating || now - this.t.genStartedAt < 3000 || now - this.t.submitAt < 3000;
+      // Attribute changes of controls anywhere (e.g. the send button turning into a stop button).
+      const controlAttr = r.type === 'attributes' && busy && safeMatches(el, TRACE_CONTROLS);
+      if (!container && !addedIsControl && !controlAttr && !(busy && added !== undefined)) continue;
       const type = r.type === 'characterData' ? 'text' : r.type === 'attributes' ? 'attr' : 'child';
       const addDesc = added ? describeNode(added) : r.addedNodes.length > 0 ? '#text' : '';
       this.trace.mutation(now, describePath(el, container, 7), type, act, addDesc);
@@ -458,7 +481,8 @@ export class DomDetector implements AIDetector {
     const node = r.target;
     const el = node.nodeType === 1 ? (node as Element) : node.parentElement;
     if (!el) return false;
-    if (!closestAny(el, this.profile.response)) return false;
+    const container = closestAny(el, this.profile.response);
+    if (!container || !this.latestResponses.has(container)) return false;
     const ignore = [...this.profile.thinking, ...this.profile.tool, ...this.profile.generating, ...this.profile.composer];
     if (closestAny(el, ignore)) return false;
     if (r.type === 'characterData') return true;
@@ -610,14 +634,27 @@ export class DomDetector implements AIDetector {
       t.errorBaseline = raw.errorCount;
     }
 
+    // Fallback when a platform's busy markers are unknown or changed: after a
+    // submit, growth of the latest answer starts a generation, and recent
+    // growth keeps it alive (it then ends after the task-end wait).
+    const recentActivity = now - t.lastResponseActivityAt < this.timing.activityWindowMs;
+    let generatingNow = rawGenerating;
+    if (!rawGenerating && t.errorAt === null) {
+      if (t.generating && t.activityMode && recentActivity) generatingNow = true;
+      else if (!t.generating && t.lastResponseActivityAt >= t.submitAt && recentActivity && this.pendingSubmit(now)) generatingNow = true;
+    }
+
     // Generation lifecycle.
-    if (rawGenerating && t.errorAt === null) {
+    if (generatingNow && t.errorAt === null) {
       t.notGeneratingSince = null;
+      if (rawGenerating) t.activityMode = false;
       if (!t.generating) {
         t.generating = true;
         t.genStartedAt = now;
+        t.activityMode = !rawGenerating;
+        if (!Number.isFinite(t.traceFrom) || now - t.traceFrom > 120_000) t.traceFrom = now;
         t.submitAt = Number.NEGATIVE_INFINITY; // the pending request has started
-        this.trace.mark(now, 'generation-start');
+        this.trace.mark(now, rawGenerating ? 'generation-start' : 'generation-start:answer-growth');
         t.completedAt = null;
         t.errorBaseline = Math.min(t.errorBaseline, raw.errorCount);
       }
@@ -629,8 +666,15 @@ export class DomDetector implements AIDetector {
         const aborted = t.abortAt >= t.genStartedAt;
         if (!aborted) t.completedAt = now;
         this.trace.mark(now, aborted ? 'generation-end:aborted' : 'generation-end');
-        this.trace.finish(t.genStartedAt, now);
+        this.trace.finish(Math.min(t.traceFrom, t.genStartedAt), now);
+        t.traceFrom = Number.NEGATIVE_INFINITY;
       }
+    } else if (Number.isFinite(t.traceFrom) && Number.isFinite(t.submitAt) && !this.pendingSubmit(now)) {
+      // A submit that never turned into a recognised generation: still report it.
+      this.trace.mark(now, 'submit-expired');
+      this.trace.finish(t.traceFrom, now);
+      t.traceFrom = Number.NEGATIVE_INFINITY;
+      t.submitAt = Number.NEGATIVE_INFINITY;
     }
     if (t.abortAt >= t.genStartedAt && t.abortAt > Number.NEGATIVE_INFINITY) signals.push('user-abort');
 
@@ -643,6 +687,11 @@ export class DomDetector implements AIDetector {
     if (t.generating) {
       const activity = t.lastResponseActivityAt >= t.genStartedAt && now - t.lastResponseActivityAt < this.timing.activityWindowMs;
       if (activity) signals.push('response-activity');
+      if (t.activityMode && t.notGeneratingSince !== null) {
+        // Answer-growth fallback: the text stopped and we are waiting to see
+        // whether the task is done. Keep the last state instead of flashing "thinking".
+        return { state: 'responding', confidence: 0.5, signals };
+      }
       const block = this.activeBlock();
       if (block) this.traceBlock(block, now);
       if (raw.toolMarker || block?.category === 'tool') {

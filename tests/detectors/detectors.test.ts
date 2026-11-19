@@ -551,3 +551,92 @@ describe('agent runs: "completed" only when the whole task is finished', () => {
     expect(emitted.filter((s) => s === 'completed')).toHaveLength(1);
   });
 });
+
+describe('ChatGPT with changed/unknown markup', () => {
+  function chatgptSubmit(): void {
+    const p = document.querySelector('#prompt-textarea p')!;
+    p.textContent = 'Question';
+    document.querySelector('#prompt-textarea')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    p.textContent = '';
+    const turn = document.createElement('article');
+    turn.innerHTML = '<div data-message-author-role="user"><div>Question</div></div>';
+    document.querySelector('main')!.insertBefore(turn, document.querySelector('form'));
+  }
+  function newAnswer(): Element {
+    const turn = document.createElement('article');
+    turn.innerHTML = '<div data-message-author-role="assistant"><div class="markdown prose"><p></p></div></div>';
+    document.querySelector('main')!.insertBefore(turn, document.querySelector('form'));
+    return turn.querySelector('p')!;
+  }
+  function setComposerButton(label: string, testid: string): void {
+    const b = document.querySelector('#composer-submit-button')!;
+    b.setAttribute('aria-label', label);
+    b.setAttribute('data-testid', testid);
+  }
+
+  it('a bare "Stop" button inside the prompt form marks generation', async () => {
+    loadFixture('chatgpt', 'idle');
+    start(chatgptProfile);
+    await tick(300);
+    chatgptSubmit();
+    setComposerButton('Stop', 'composer-action-button');
+    await tick(1500);
+    expect(detector.getState()).toBe('thinking');
+    expect(detector.getSnapshot().signals).toContain('stop-button');
+    await grow(newAnswer(), 1500);
+    expect(detector.getState()).toBe('responding');
+    setComposerButton('Send prompt', 'composer-action-button');
+    await tick(2800);
+    expect(detector.getState()).toBe('completed');
+    expect(emitted).toEqual(['thinking', 'responding', 'completed']);
+  });
+
+  it('no recognisable markers at all: submit → thinking, answer growth → responding → completed', async () => {
+    loadFixture('chatgpt', 'idle');
+    document.querySelector('#composer-submit-button')!.remove(); // nothing to recognise
+    start(chatgptProfile);
+    await tick(300);
+    chatgptSubmit();
+    await tick(2000);
+    expect(detector.getState()).toBe('thinking');
+    const p = newAnswer();
+    await grow(p, 3000);
+    expect(detector.getState()).toBe('responding');
+    await tick(2500 + 2000 + 500); // quiet: activity window + task-end wait
+    expect(detector.getState()).toBe('completed');
+    expect(emitted).toEqual(['thinking', 'responding', 'completed']);
+  });
+
+  it('an older answer re-rendering after submit is not "responding"', async () => {
+    loadFixture('chatgpt', 'idle');
+    document.querySelector('#composer-submit-button')!.remove();
+    start(chatgptProfile);
+    await tick(300);
+    chatgptSubmit();
+    const latestBefore = newAnswer(); // the new (empty) answer exists…
+    void latestBefore;
+    const old = document.querySelector('[data-message-author-role="assistant"] .markdown p')!; // …but the old one re-renders
+    await grow(old, 1500);
+    expect(detector.getState()).toBe('thinking');
+  });
+
+  it('produces a detection report even when no generation was recognised', async () => {
+    const reports: { timeline: { e: string }[] }[] = [];
+    loadFixture('chatgpt', 'idle');
+    detector = new DomDetector(chatgptProfile, { getPath: () => path, onReport: (r) => reports.push(r) });
+    detector.trace.setEnabled(true);
+    emitted = [];
+    detector.initialize();
+    await tick(300);
+    chatgptSubmit();
+    setComposerButton('Something new', 'composer-mystery-button');
+    await tick(5000); // unconfirmed? no — the user message appeared, so pending lasts; let it expire:
+    await tick(60_000);
+    expect(reports.length).toBeGreaterThanOrEqual(1);
+    const events = reports[0]!.timeline.map((x) => x.e);
+    expect(events).toContain('submit');
+    expect(events).toContain('submit-expired');
+    expect(JSON.stringify(reports)).toContain('composer-mystery-button');
+    expect(JSON.stringify(reports)).not.toMatch(/Question|Something new/);
+  });
+});
