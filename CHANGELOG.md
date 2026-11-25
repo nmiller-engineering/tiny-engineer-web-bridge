@@ -9,6 +9,9 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Keyboard shortcut** **Alt+Shift+R** turns the bridge on/off (changeable in the browser's extension shortcut settings).
 - **One-click mode (optional):** a click on the icon turns the bridge on/off instead of opening the popup; settings and on/off are in the icon's right-click menu. Choose under Settings → Behaviour or via the right-click menu.
 
+### Fixed
+- **ChatGPT “typing” not detected:** answers rendered as list items (`li[data-message-role=assistant]`) are now recognised; selectors cross-checked with the maintained chatgpt.js library.
+
 ### Changed
 - New permission `contextMenus` (right-click menu of the toolbar icon only).
 

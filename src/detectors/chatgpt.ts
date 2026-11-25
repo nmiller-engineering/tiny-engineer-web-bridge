@@ -1,10 +1,17 @@
 /**
  * ChatGPT (https://chatgpt.com) profile.
  *
- * VERIFICATION STATUS: NOT verified against the live site from this
- * repository's CI. Selectors reflect publicly observed ChatGPT markup
- * (data-testid / data-message-author-role attributes) and may change at any
- * time. See docs/DETECTION.md and docs/MANUAL_TESTING.md.
+ * VERIFICATION STATUS: not verified from this repository's CI. Selectors are
+ * cross-checked against the actively maintained open-source library
+ * chatgpt.js (KudoAI, MIT; src/chatgpt.js `selectors`, commit 43f377e,
+ * 2026-08-10), which decides "ChatGPT is typing" by the stop button alone:
+ *   btns.stop      button[data-testid=stop-button]
+ *   btns.send      button[data-testid=send-button]
+ *   chatDivs.reply li[data-message-role=assistant], div[data-message-author-role=assistant]
+ *   chatDivs.msg   li[data-message-role], div[data-message-author-role]
+ *   errors.txt     div[class*=text-error]
+ *   getChatBox()   #prompt-textarea
+ * See docs/DETECTION.md and docs/MANUAL_TESTING.md.
  */
 import { DomDetector, type DomDetectorOptions, type PlatformProfile } from './base';
 
@@ -24,9 +31,10 @@ export const chatgptProfile: PlatformProfile = {
   // No reliable, language-independent tool markers are known for ChatGPT;
   // tool activity is reported as `thinking` (see docs/DETECTION.md).
   tool: [],
-  error: ['[data-testid="error-message"]', '.text-token-text-error'],
-  response: ['[data-message-author-role="assistant"]', 'article[data-turn="assistant"]'],
-  userMessage: ['[data-message-author-role="user"]'],
+  error: ['[data-testid="error-message"]', 'div[class*="text-error"]'],
+  // Newer ChatGPT renders turns as list items (li[data-message-role=…]); older as divs.
+  response: ['li[data-message-role="assistant"]', '[data-message-author-role="assistant"]', 'article[data-turn="assistant"]'],
+  userMessage: ['li[data-message-role="user"]', '[data-message-author-role="user"]'],
   sendButtons: ['button[data-testid="send-button"]', 'button[aria-label^="send" i]'],
 };
 
