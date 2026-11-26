@@ -93,7 +93,7 @@ async function createMenus(config: Config): Promise<void> {
     await browser.contextMenus.removeAll();
     browser.contextMenus.create({ id: MENU_TOGGLE, title: ui.toggleMenuTitle, contexts });
     browser.contextMenus.create({ id: MENU_POPUP_MODE, title: 'One click on the icon turns on/off', type: 'checkbox', checked: config.toolbarClick === 'toggle', contexts });
-    browser.contextMenus.create({ id: MENU_SETTINGS, title: 'Settings', contexts });
+    browser.contextMenus.create({ id: MENU_SETTINGS, title: 'Open dashboard', contexts });
   } catch {
     /* menus unavailable — the icon still works */
   }

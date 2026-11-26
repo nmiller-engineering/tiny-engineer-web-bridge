@@ -31,7 +31,7 @@ The robot is driven **directly from the extension** over your local **Wi-Fi (HTT
 ## Turning it on and off
 
 - The toolbar icon shows the state: coloured = on, grey with **OFF** = off.
-- Click the icon → switch in the popup, or press **Alt+Shift+R**.
+- Click the icon → big **Robot link on/off** button and **Open dashboard** in the popup, or press **Alt+Shift+R**.
 - Prefer one click? Settings → Behaviour → *One click turns on/off* (or right-click the icon → *One click on the icon turns on/off*). Settings are then in the right-click menu.
 - Change the shortcut: Firefox `about:addons` → gear → *Manage Extension Shortcuts*; Chrome `chrome://extensions/shortcuts`.
 - Icon not visible? Pin it: puzzle icon in the toolbar → pin *Tiny Engineer Web Bridge*.

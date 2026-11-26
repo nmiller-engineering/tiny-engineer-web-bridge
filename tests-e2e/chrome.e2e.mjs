@@ -190,6 +190,14 @@ async function main() {
     }, 5000);
     check('popup shows "Connected"', Boolean(popupConn), (await popup.textContent('#connection')) ?? '');
 
+    // Big on/off button in the popup.
+    await popup.click('#power');
+    const offViaPopup = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === 'OFF' ? 'OFF' : null), 3000);
+    check('popup power button turns the link off (OFF badge)', offViaPopup === 'OFF', (await popup.textContent('#power-label')) ?? '');
+    await popup.click('#power');
+    const onAgain = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === '' ? 'on' : null), 3000);
+    check('popup power button turns it back on', onAgain === 'on', (await popup.textContent('#power-label')) ?? '');
+
     // --- USB: requests are routed to the USB connection page ---
     await options.evaluate(async () => {
       const { config } = await browser.storage.local.get('config');
