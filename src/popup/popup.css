@@ -1,15 +1,30 @@
-body { width: 340px; background: var(--surface); }
+body { width: 320px; background: var(--surface); }
 .top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .brand { flex: 1; line-height: 1.2; }
 .brand h1 { font-size: 15px; }
-main { display: grid; gap: 10px; padding: 12px 14px; }
-.status-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.card { padding: 12px 14px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); display: grid; gap: 8px; }
+main { display: grid; gap: 10px; padding: 14px; }
+
+/* Big on/off control */
+.power {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; text-align: left;
+  border-radius: var(--radius); border: 1px solid transparent; cursor: pointer; font: inherit;
+  background: var(--ok-soft); color: var(--fg); transition: background 0.15s, border-color 0.15s;
+}
+.power:hover { border-color: var(--ok); }
+.power:focus-visible { outline: none; box-shadow: var(--focus); }
+.power-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--ok); color: #fff; flex: none; }
+.power-icon svg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.power-text { display: grid; gap: 1px; }
+.power-text strong { font-size: 16px; }
+.power-text span { font-size: 12px; color: var(--fg-2); }
+.power[aria-pressed="false"] { background: var(--surface-2); border-color: var(--border); }
+.power[aria-pressed="false"]:hover { border-color: var(--border-strong); }
+.power[aria-pressed="false"] .power-icon { background: var(--border-strong); color: var(--surface); }
+
+.card { padding: 12px 14px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); display: grid; gap: 6px; }
 .card h2 { font-size: 14px; }
-.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.state { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-.state .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--muted); box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 0%, transparent); }
-.state[data-state="idle"] .dot, .state[data-state="unknown"] .dot { background: var(--border-strong); }
+.state { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; }
+.state .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--border-strong); }
 .state[data-state="user_typing"] .dot { background: var(--info); }
 .state[data-state="thinking"] .dot { background: var(--info); animation: pulse 1.4s ease-in-out infinite; }
 .state[data-state="responding"] .dot { background: var(--accent); animation: pulse 0.9s ease-in-out infinite; }
@@ -17,7 +32,11 @@ main { display: grid; gap: 10px; padding: 12px 14px; }
 .state[data-state="completed"] .dot { background: var(--ok); }
 .state[data-state="error"] .dot { background: var(--bad); }
 .source { color: var(--fg-2); font-size: 13px; }
-.robot-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px dashed var(--border-strong); font-size: 13px; }
-.actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 10px 14px 14px; }
-.actions.single { grid-template-columns: 1fr; justify-items: end; }
-body.off .activity { opacity: 0.5; }
+.robot-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 6px; border-top: 1px dashed var(--border-strong); font-size: 13px; }
+
+.actions { display: grid; gap: 8px; padding: 0 14px 14px; }
+.sub-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); font: 600 12px var(--font); cursor: pointer; }
+.linklike:hover { text-decoration: underline; }
+.linklike:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+body.off .activity { display: none; }

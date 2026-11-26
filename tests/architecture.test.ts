@@ -71,7 +71,7 @@ describe('Chrome build', () => {
     expect(m.background).toEqual({ service_worker: 'background.js' });
     expect(m.browser_specific_settings).toBeUndefined();
     expect(m.minimum_chrome_version).toBe('120');
-    expect(m.permissions.sort()).toEqual(['alarms', 'scripting', 'storage']);
+    expect(m.permissions.sort()).toEqual(['alarms', 'contextMenus', 'scripting', 'storage']);
     expect(m.host_permissions).toEqual(['https://chatgpt.com/*', 'https://claude.ai/*']);
   });
 
@@ -93,9 +93,10 @@ describe('manifest', () => {
 
   it('uses MV3 with minimal permissions', () => {
     expect(manifest.manifest_version).toBe(3);
-    expect(manifest.permissions.sort()).toEqual(['alarms', 'scripting', 'storage']);
+    expect(manifest.permissions.sort()).toEqual(['alarms', 'contextMenus', 'scripting', 'storage']);
     expect(manifest.host_permissions).toEqual(['https://chatgpt.com/*', 'https://claude.ai/*']);
     expect(manifest.permissions).not.toContain('<all_urls>');
+    expect(manifest.commands['toggle-bridge'].suggested_key.default).toBe('Alt+Shift+R');
     expect(manifest.host_permissions).not.toContain('<all_urls>');
     expect(manifest.content_scripts).toBeUndefined(); // registered dynamically per enabled platform
   });

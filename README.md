@@ -28,6 +28,14 @@ The robot is driven **directly from the extension** over your local **Wi-Fi (HTT
 - Popup with connection status, firmware version, current robot animation, last transmitted state; options page with diagnostics (per-tab state, confidence, signals, last command, last error) and an opt-in in-memory debug log.
 - Minimal permissions; content scripts are only registered for platforms you enable.
 
+## Turning it on and off
+
+- The toolbar icon shows the state: coloured = on, grey with **OFF** = off.
+- Click the icon → big **Robot link on/off** button and **Open dashboard** in the popup, or press **Alt+Shift+R**.
+- Prefer one click? Settings → Behaviour → *One click turns on/off* (or right-click the icon → *One click on the icon turns on/off*). Settings are then in the right-click menu.
+- Change the shortcut: Firefox `about:addons` → gear → *Manage Extension Shortcuts*; Chrome `chrome://extensions/shortcuts`.
+- Icon not visible? Pin it: puzzle icon in the toolbar → pin *Tiny Engineer Web Bridge*.
+
 ## Supported AI platforms
 
 | Platform | Site | Selector status |

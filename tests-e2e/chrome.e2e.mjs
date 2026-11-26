@@ -162,6 +162,25 @@ async function main() {
     const after = posts();
     check('no "none" sent after the one-shot ring', after[after.length - 1] === 'ring', after.join(' → '));
 
+    // --- Toolbar icon: OFF badge, one-click mode, shortcut ---
+    const setCfg = (patch) =>
+      options.evaluate(async (p) => {
+        const { config } = await browser.storage.local.get('config');
+        await browser.storage.local.set({ config: { ...config, ...p } });
+      }, patch);
+    await setCfg({ enabled: false });
+    const off = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === 'OFF' ? 'OFF' : null), 3000);
+    check('bridge off → "OFF" badge on the toolbar icon', off === 'OFF');
+    await setCfg({ enabled: true, toolbarClick: 'toggle' });
+    const popupOff = await waitFor(async () => ((await options.evaluate(() => browser.action.getPopup({}))) === '' ? 'none' : null), 3000);
+    const badgeOn = await options.evaluate(() => browser.action.getBadgeText({}));
+    check('one-click mode disables the popup; badge cleared when on', popupOff === 'none' && badgeOn === '', `popup=${popupOff} badge="${badgeOn}"`);
+    await setCfg({ toolbarClick: 'popup' });
+    const popupBack = await waitFor(async () => ((await options.evaluate(() => browser.action.getPopup({}))).endsWith('popup/index.html') ? 'popup' : null), 3000);
+    check('popup mode restores the popup', popupBack === 'popup');
+    const cmd = await options.evaluate(async () => (await browser.commands.getAll()).find((c) => c.name === 'toggle-bridge'));
+    check('keyboard shortcut command registered', Boolean(cmd), cmd ? `shortcut: ${cmd.shortcut || '(unassigned in headless)'}` : 'missing');
+
     // --- Popup renders live state ---
     const popup = await ctx.newPage();
     await popup.goto(`chrome-extension://${id}/popup/index.html`);
@@ -170,6 +189,14 @@ async function main() {
       return t?.includes('Connected') ? t : null;
     }, 5000);
     check('popup shows "Connected"', Boolean(popupConn), (await popup.textContent('#connection')) ?? '');
+
+    // Big on/off button in the popup.
+    await popup.click('#power');
+    const offViaPopup = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === 'OFF' ? 'OFF' : null), 3000);
+    check('popup power button turns the link off (OFF badge)', offViaPopup === 'OFF', (await popup.textContent('#power-label')) ?? '');
+    await popup.click('#power');
+    const onAgain = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === '' ? 'on' : null), 3000);
+    check('popup power button turns it back on', onAgain === 'on', (await popup.textContent('#power-label')) ?? '');
 
     // --- USB: requests are routed to the USB connection page ---
     await options.evaluate(async () => {

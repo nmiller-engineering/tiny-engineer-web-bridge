@@ -486,10 +486,37 @@ for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="arb
   });
 }
 
+for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="toolbarClick"]')) {
+  radio.addEventListener('change', () => {
+    if (!radio.checked) return;
+    const toggle = radio.value === 'toggle';
+    void update((c) => (c.toolbarClick = toggle ? 'toggle' : 'popup'), toggle ? 'Icon click turns on/off' : 'Icon opens the popup');
+  });
+}
+
+async function renderShortcut(): Promise<void> {
+  try {
+    const cmd = (await browser.commands.getAll()).find((c) => c.name === 'toggle-bridge');
+    setText($('#shortcut'), cmd?.shortcut || 'not set');
+  } catch {
+    setText($('#shortcut'), 'not available');
+  }
+  setText(
+    $('#shortcut-hint'),
+    TARGET === 'chrome'
+      ? '— change it at chrome://extensions/shortcuts'
+      : '— change it in about:addons → gear menu → Manage Extension Shortcuts',
+  );
+}
+
 function fillBehaviour(): void {
   for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="arbitration"]')) {
     radio.checked = radio.value === config.arbitration;
   }
+  for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="toolbarClick"]')) {
+    radio.checked = radio.value === config.toolbarClick;
+  }
+  void renderShortcut();
   buildTiming();
 }
 
@@ -628,6 +655,7 @@ browser.storage.onChanged.addListener((changes, area) => {
     void loadConfig().then((c) => {
       config = c;
       $input('#enabled').checked = c.enabled;
+      for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="toolbarClick"]')) radio.checked = radio.value === c.toolbarClick;
     });
   }
 });

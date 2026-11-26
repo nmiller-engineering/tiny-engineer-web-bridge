@@ -640,3 +640,51 @@ describe('ChatGPT with changed/unknown markup', () => {
     expect(JSON.stringify(reports)).not.toMatch(/Question|Something new/);
   });
 });
+
+describe('ChatGPT list-item turns (li[data-message-role], per chatgpt.js 2026-08)', () => {
+  it('send → thinking, stop button + growing li answer → responding → completed', async () => {
+    loadFixture('chatgpt', 'list-streaming');
+    start(chatgptProfile);
+    await tick(300);
+    const draft = document.querySelector('#prompt-textarea p')!;
+    draft.textContent = 'Question';
+    document.querySelector('#prompt-textarea')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    draft.textContent = '';
+    const turns = document.querySelector('ol.turns')!;
+    const user = document.createElement('li');
+    user.setAttribute('data-message-role', 'user');
+    turns.append(user);
+    const btn = document.querySelector('#composer-submit-button')!;
+    btn.setAttribute('data-testid', 'stop-button');
+    btn.setAttribute('aria-label', 'Stop streaming');
+    await tick(1500);
+    expect(detector.getState()).toBe('thinking');
+
+    const answer = document.createElement('li');
+    answer.setAttribute('data-message-role', 'assistant');
+    answer.innerHTML = '<div class="markdown prose"><p></p></div>';
+    turns.append(answer);
+    await grow(answer.querySelector('p')!, 2000);
+    expect(detector.getState()).toBe('responding');
+    expect(detector.getSnapshot().signals).toEqual(expect.arrayContaining(['stop-button', 'response-activity']));
+
+    btn.setAttribute('data-testid', 'send-button');
+    btn.setAttribute('aria-label', 'Send prompt');
+    await tick(2600);
+    expect(detector.getState()).toBe('completed');
+    expect(emitted).toEqual(['thinking', 'responding', 'completed']);
+  });
+
+  it('an older li answer re-rendering does not count as typing', async () => {
+    loadFixture('chatgpt', 'list-streaming');
+    start(chatgptProfile);
+    const btn = document.querySelector('#composer-submit-button')!;
+    btn.setAttribute('data-testid', 'stop-button');
+    const turns = document.querySelector('ol.turns')!;
+    const fresh = document.createElement('li');
+    fresh.setAttribute('data-message-role', 'assistant');
+    turns.append(fresh);
+    await grow(document.querySelector('li[data-message-role="assistant"] p')!, 1500); // the old answer
+    expect(detector.getState()).toBe('thinking');
+  });
+});

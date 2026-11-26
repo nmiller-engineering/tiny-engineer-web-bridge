@@ -21,6 +21,7 @@ Extended reasoning that streams text into the page usually appears as `respondin
 | Date | Platform | Result |
 | --- | --- | --- |
 | 2026-11-19 | Claude | idle, user typing, responding, completed and mid-answer thinking detected. Initial thinking not shown. Tool/command use shown as thinking (no Claude tool rule yet). |
+| 2026-11-25 | ChatGPT | Typing still not detected. Cause: answers are now `li[data-message-role=assistant]` (per chatgpt.js), unknown to the profile, so answer growth was invisible → stayed `thinking`. Added; test fails without it. Awaiting live re-test. |
 | 2026-11-19 | ChatGPT | “thinking sometimes, typing never”: generation was never recognised (stop button / `.result-streaming` rules outdated), so only the submit layer worked. Added broader stop rules inside the prompt form and the answer-growth fallback; detection reports now also cover submits without a recognised generation. Awaiting re-test + report. |
 | 2026-11-19 | Claude | Works well (thinking, tool use, responding, agent runs) after the layered design. |
 | 2026-11-19 | Claude | Agent runs rang “completed” after each step (streaming pauses during tool execution > 0.7 s end grace). Now: 2 s task-end wait + turn-level busy markers. |
@@ -56,16 +57,18 @@ Thinking: thinking, thought, reasoning, pondering, considering, … / denkt, nac
 Tool: search(ed/ing), fetch, read, view, open, run/ran, execut…, calling, used/using, creat…, edit, writ…, analy…, install, download, query … / such…, ruft, führt aus, erstell…, bearbeit…, schreib…, les…, analys…, verwend…, nutz…
 Labels longer than 80 characters are ignored. Extend the lists when a platform prints new status words.
 
-### ChatGPT — `src/detectors/chatgpt.ts` — **unverified assumptions**
+### ChatGPT — `src/detectors/chatgpt.ts` — **cross-checked with chatgpt.js (2026-08), not live-verified here**
+
+Selectors are cross-checked against the maintained open-source library [chatgpt.js](https://github.com/KudoAI/chatgpt.js) (MIT, `src/chatgpt.js` → `selectors`, commit `43f377e`, 2026-08-10). It treats `button[data-testid=stop-button]` as the only “is typing” signal and lists answers as `li[data-message-role=assistant]` (newer) or `div[data-message-author-role=assistant]` (older).
 
 | Purpose | Selector(s) |
 | --- | --- |
 | composer | `#prompt-textarea`, `[data-testid="prompt-textarea"]`, `form [contenteditable="true"]`, `form textarea` |
 | stop | `button[data-testid="stop-button"]`, `form button[data-testid*="stop"]`; label starting with “Stop” **inside the prompt form**; elsewhere only `Stop streaming/generating/answering/response` (read-aloud uses a bare “Stop” outside the form) |
 | streaming | `.result-streaming` |
-| answer area | `[data-message-author-role="assistant"]`, `article[data-turn="assistant"]` |
-| user messages / send | `[data-message-author-role="user"]`, `button[data-testid="send-button"]` |
-| error | `[data-testid="error-message"]`, `.text-token-text-error` |
+| answer area | `li[data-message-role="assistant"]`, `[data-message-author-role="assistant"]`, `article[data-turn="assistant"]` |
+| user messages / send | `li[data-message-role="user"]`, `[data-message-author-role="user"]`, `button[data-testid="send-button"]` |
+| error | `[data-testid="error-message"]`, `div[class*="text-error"]` |
 | tool | none known |
 
 ### Claude — `src/detectors/claude.ts` — **unverified assumptions**

@@ -62,8 +62,12 @@ export interface TimingConfig {
   taskEndMs: number;
 }
 
+/** What a click on the toolbar icon does. */
+export type ToolbarClick = 'popup' | 'toggle';
+
 export interface Config {
   enabled: boolean;
+  toolbarClick: ToolbarClick;
   device: DeviceConfig;
   platforms: PlatformConfig;
   mapping: AnimationMapping;
@@ -116,6 +120,7 @@ export const TIMING_BOUNDS: Record<keyof TimingConfig, readonly [number, number]
 
 export const DEFAULT_CONFIG: Config = {
   enabled: true,
+  toolbarClick: 'popup',
   device: { transport: 'http', usbVendorId: null, usbProductId: null, host: '', port: 80, token: '', autoReconnect: true },
   platforms: { chatgpt: true, claude: true, openwebui: false, openwebuiOrigin: '' },
   mapping: { ...DEFAULT_MAPPING },
@@ -276,6 +281,7 @@ export function sanitizeConfig(raw: unknown): Config {
 
   return {
     enabled: bool(input.enabled, d.enabled),
+    toolbarClick: input.toolbarClick === 'toggle' ? 'toggle' : 'popup',
     device: {
       transport: dev.transport === 'serial' ? 'serial' : 'http',
       usbVendorId: usbId(dev.usbVendorId),

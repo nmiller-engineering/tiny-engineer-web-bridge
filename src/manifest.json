@@ -42,7 +42,8 @@
   "permissions": [
     "storage",
     "scripting",
-    "alarms"
+    "alarms",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
@@ -56,5 +57,13 @@
     "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src http:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
   },
   "author": "nmiller-engineering",
-  "short_name": "TE Web Bridge"
+  "short_name": "TE Web Bridge",
+  "commands": {
+    "toggle-bridge": {
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
+      "description": "Turn the robot bridge on or off"
+    }
+  }
 }
