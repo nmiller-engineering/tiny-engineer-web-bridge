@@ -25,6 +25,17 @@ describe('toolbar icon', () => {
     expect(actionUiFor({ enabled: false, toolbarClick: 'toggle' }).title).toContain('click to turn on');
   });
 
+  it('shows an orange "!" when the robot is unreachable while on', () => {
+    for (const c of ['disconnected', 'error', 'no-permission'] as const) {
+      const ui = actionUiFor({ enabled: true, toolbarClick: 'popup' }, '', c);
+      expect(ui.badgeText).toBe('!');
+      expect(ui.title).toContain('unreachable');
+    }
+    expect(actionUiFor({ enabled: true, toolbarClick: 'popup' }, '', 'connected').badgeText).toBe('');
+    expect(actionUiFor({ enabled: false, toolbarClick: 'popup' }, '', 'disconnected').badgeText).toBe('OFF'); // off wins
+    expect(actionUiFor({ enabled: false, toolbarClick: 'popup' }).title).toContain('robot sleeping');
+  });
+
   it('sanitizes the click setting', () => {
     expect(sanitizeConfig({ toolbarClick: 'toggle' }).toolbarClick).toBe('toggle');
     expect(sanitizeConfig({ toolbarClick: 'launch-missiles' }).toolbarClick).toBe('popup');

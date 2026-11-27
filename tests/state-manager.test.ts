@@ -158,20 +158,33 @@ describe('StateManager', () => {
     expect(sent).toEqual(['none']);
   });
 
-  it('sends none once when the bridge is disabled, and nothing afterwards', async () => {
+  it('puts the robot to sleep once when switched off, and wakes it when switched on', async () => {
     const { clock, sent, report, config, sm } = setup();
     report(1, 'responding');
     await clock.advance(1000);
     config.enabled = false;
     sm.evaluate();
-    report(1, 'thinking');
+    report(1, 'thinking'); // AI activity while off is ignored
     await clock.advance(5000);
-    expect(sent).toEqual(['typing', 'none']);
+    expect(sent).toEqual(['typing', 'sleep']);
     config.enabled = true;
     sm.invalidate();
     sm.evaluate();
+    await clock.advance(3000);
+    expect(sent).toEqual(['typing', 'sleep', 'wakeup', 'thinking']);
+  });
+
+  it('after waking up while idle, does not cut the wakeup short with "none"', async () => {
+    const { clock, sent, report, config, sm } = setup();
+    report(1, 'idle');
+    await clock.advance(1000);
+    config.enabled = false;
+    sm.evaluate();
     await clock.advance(2000);
-    expect(sent).toEqual(['typing', 'none', 'thinking']);
+    config.enabled = true;
+    sm.evaluate();
+    await clock.advance(8000);
+    expect(sent).toEqual(['none', 'sleep', 'wakeup']);
   });
 
   it('restores after a background restart without re-sending', async () => {

@@ -194,9 +194,15 @@ async function main() {
     await popup.click('#power');
     const offViaPopup = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === 'OFF' ? 'OFF' : null), 3000);
     check('popup power button turns the link off (OFF badge)', offViaPopup === 'OFF', (await popup.textContent('#power-label')) ?? '');
+    await waitFor(() => posts().at(-1) === 'sleep', 3000);
+    check('switching off puts the robot to sleep', posts().at(-1) === 'sleep', posts().slice(-3).join(' → '));
     await popup.click('#power');
     const onAgain = await waitFor(async () => ((await options.evaluate(() => browser.action.getBadgeText({}))) === '' ? 'on' : null), 3000);
-    check('popup power button turns it back on', onAgain === 'on', (await popup.textContent('#power-label')) ?? '');
+    await sleep(300);
+    const labelOn = (await popup.textContent('#power-label')) ?? '';
+    check('popup power button turns it back on (badge and label)', onAgain === 'on' && labelOn === 'Robot link on', labelOn);
+    await waitFor(() => posts().at(-1) === 'wakeup', 3000);
+    check('switching on wakes the robot up', posts().at(-1) === 'wakeup', posts().slice(-3).join(' → '));
 
     // --- USB: requests are routed to the USB connection page ---
     await options.evaluate(async () => {

@@ -37,6 +37,7 @@ function schedulePersist(): void {
     if (!bridge) return;
     void browser.storage.session.set({ [SESSION_KEY]: bridge.snapshot() }).catch(() => undefined);
     void updateWatchdog();
+    if (currentConfig) void applyActionUi(currentConfig); // connection changes → "!" badge
   }, PERSIST_DELAY_MS);
 }
 
@@ -69,9 +70,15 @@ async function shortcutText(): Promise<string> {
   }
 }
 
-/** Icon, badge, tooltip, click behaviour and menu titles for the current config. */
+let lastActionKey = '';
+
+/** Icon, badge, tooltip, click behaviour and menu titles for the current config and connection. */
 async function applyActionUi(config: Config): Promise<void> {
-  const ui = actionUiFor(config, await shortcutText());
+  const connection = bridge?.getStatus().connection ?? 'unknown';
+  const ui = actionUiFor(config, await shortcutText(), connection);
+  const key = JSON.stringify([ui, config.toolbarClick]);
+  if (key === lastActionKey) return;
+  lastActionKey = key;
   const action = browser.action as typeof browser.action & { setBadgeTextColor?: (d: { color: string }) => Promise<void> };
   await Promise.all([
     action.setIcon({ path: ui.icon }),

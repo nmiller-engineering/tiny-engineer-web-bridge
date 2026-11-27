@@ -30,7 +30,7 @@ The robot is driven **directly from the extension** over your local **Wi-Fi (HTT
 
 ## Turning it on and off
 
-- The toolbar icon shows the state: coloured = on, grey with **OFF** = off.
+- The toolbar icon shows the state: coloured = on, grey with **OFF** = off (the robot is sent to **sleep**; switching on sends **wakeup**), orange **!** = on, but the robot does not answer.
 - Click the icon → big **Robot link on/off** button and **Open dashboard** in the popup, or press **Alt+Shift+R**.
 - Prefer one click? Settings → Behaviour → *One click turns on/off* (or right-click the icon → *One click on the icon turns on/off*). Settings are then in the right-click menu.
 - Change the shortcut: Firefox `about:addons` → gear → *Manage Extension Shortcuts*; Chrome `chrome://extensions/shortcuts`.
@@ -205,6 +205,7 @@ Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) · Security model: [SECURITY.md
 | Chrome: “The USB connection tab is not open” | Settings → USB → **Open USB tab**, and keep that tab open (pin it). |
 | USB: “Cannot open the USB port” | Another program holds it (upstream daemon, serial monitor, flasher). |
 | Robot does not react to an AI site | Options → Diagnostics: is the tab listed? Which signals? An empty list for a busy page means the site's markup changed — please open an issue with the signals shown (no conversation content needed). |
+| Orange “!” on the icon after the robot ran for a long time | The robot does not answer. The firmware connects to Wi-Fi only at start-up and keeps the IP it got then; after a router restart or DHCP change it may be unreachable or have a new IP (shown on its display). Restart the robot, update the IP in the dashboard, and give the robot a fixed IP (DHCP reservation) in your router. The extension cannot reboot the robot: the firmware API has no reboot command, and an unreachable robot cannot receive one anyway. |
 | Robot keeps animating after closing the browser | The extension cannot send anything after the browser exits; the firmware's `continuous_timeout` (default 5 min) ends continuous animations. |
 
 ## Known limitations

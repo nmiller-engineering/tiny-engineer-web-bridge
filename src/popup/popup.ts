@@ -6,6 +6,8 @@ const POLL_MS = 1500;
 let transport: 'http' | 'serial' = 'http';
 let shortcut = '';
 let enabled = true;
+/** After a click, trust the local value briefly: the background applies it asynchronously. */
+let userSetAt = 0;
 
 function show(el: HTMLElement, text: string, tone: string): void {
   el.dataset.tone = tone;
@@ -18,7 +20,7 @@ function renderPower(): void {
   power.setAttribute('aria-pressed', String(enabled));
   setText($('#power-label'), enabled ? 'Robot link on' : 'Robot link off');
   const keys = shortcut ? ` · ${shortcut}` : '';
-  setText($('#power-hint'), (enabled ? 'Click to turn off' : 'Click to turn on') + keys);
+  setText($('#power-hint'), (enabled ? 'Click to turn off' : 'Robot is asleep · click to wake') + keys);
   document.body.classList.toggle('off', !enabled);
 }
 
@@ -30,7 +32,7 @@ async function refresh(): Promise<void> {
     show($('#notice'), 'The extension background is not reachable. Try reopening the popup.', 'bad');
     return;
   }
-  enabled = s.enabled;
+  if (Date.now() - userSetAt > 2000) enabled = s.enabled;
   renderPower();
 
   const conn = $('#connection');
@@ -59,12 +61,15 @@ async function refresh(): Promise<void> {
 
   let notice = '';
   if (s.connection === 'no-permission') notice = s.connectionDetail || 'The browser needs your permission to reach the robot. Open the dashboard → “Save & allow access”.';
-  else if ((s.connection === 'error' || s.connection === 'disconnected') && s.enabled) notice = s.connectionDetail;
+  else if (s.connection === 'disconnected' && s.enabled)
+    notice = `${s.connectionDetail} If the robot ran for a long time it may have lost its Wi-Fi or got a new IP address — check the IP on its display, or restart it.`;
+  else if (s.connection === 'error' && s.enabled) notice = s.connectionDetail;
   show($('#notice'), notice, s.connection === 'disconnected' ? 'warn' : 'bad');
 }
 
 $('#power').addEventListener('click', async () => {
   enabled = !enabled;
+  userSetAt = Date.now();
   renderPower(); // instant feedback
   const config = await loadConfig();
   config.enabled = enabled;

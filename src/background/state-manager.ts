@@ -76,15 +76,26 @@ export class StateManager {
       this.lastSelection = null;
       this.candidate = null;
       if (!this.disabledHandled) {
-        // Leave the robot at rest when the bridge is switched off.
+        // Switched off: put the robot to sleep (nod-off; it stays asleep until
+        // the next non-sleep animation wakes it).
         this.disabledHandled = true;
         this.committed = null;
-        if (queue.current !== 'none') queue.request('none');
+        if (queue.current !== 'sleep') queue.request('sleep');
+        this.deps.log?.('bridge off → sleep');
       }
       this.cancelTimer();
       return;
     }
-    this.disabledHandled = false;
+    if (this.disabledHandled) {
+      // Switched back on: wake the robot up, then continue from idle. The
+      // committed idle state keeps an immediate `none` from cutting the
+      // one-shot wakeup short.
+      this.disabledHandled = false;
+      queue.request('wakeup');
+      this.committed = { state: 'idle', target: cfg.mapping.idle, at: now };
+      this.candidate = { state: 'idle', since: now };
+      this.deps.log?.('bridge on → wakeup');
+    }
 
     const sel = registry.select(cfg.arbitration, now, cfg.timing);
     this.lastSelection = sel;

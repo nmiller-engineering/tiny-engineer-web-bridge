@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [1.1.0] - 2026-11-19
 
 ### Added
+- **Off = sleep:** turning the robot link off sends the robot to `sleep`; turning it on sends `wakeup`.
+- **Unreachable robot is visible:** while on, an orange “!” on the toolbar icon (and a hint in the popup) shows that the robot does not answer — e.g. after it lost Wi-Fi or got a new IP address.
 - **Simpler popup:** a big “Robot link on/off” button and an “Open dashboard” button (connection test moved to a small link).
 - **Toolbar on/off:** the toolbar icon turns grey with an “OFF” badge while the bridge is off.
 - **Keyboard shortcut** **Alt+Shift+R** turns the bridge on/off (changeable in the browser's extension shortcut settings).
